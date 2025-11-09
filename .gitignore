@@ -137,3 +137,37 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# PostgreSQL
+*.backup
+*.dump
+pgdata/
+postgres-data/
+pg_data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Drizzle ORM
+drizzle/
+.drizzle/
+drizzle-meta/
+*.drizzle.config.ts.timestamp-*
+
+# Build output
+dist/
+build/
+out/
+*.js.map
+*.d.ts.map
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS
+Thumbs.db
