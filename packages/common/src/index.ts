@@ -4,6 +4,9 @@ import Fastify, { FastifyReply, FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
 import dotenv from "dotenv";
 import { logger } from "./logger";
+import { httpRequestDurationMicroseconds, register } from "./metrics";
+import { getRedisClient } from "./cache";
+
 
 dotenv.config();
 
@@ -70,6 +73,21 @@ export function buildServer(serviceName?: string) {
       },
       `${serviceName || "service"} ← request end`
     );
+    // Record the request duration in our Prometheus histogram
+    httpRequestDurationMicroseconds
+      .labels(serviceName || "unknown", req.method, String(reply.statusCode))
+      .observe(timing / 1000); // convert ms to seconds
+  });
+
+  // Prometheus metrics endpoint
+  app.get("/metrics", async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const metrics = await register.metrics();
+      reply.header("Content-Type", register.contentType);
+      return reply.send(metrics);
+    } catch (ex) {
+      reply.status(500).send(ex);
+    }
   });
 
   return app;
@@ -80,6 +98,7 @@ export { logger } from "./logger";
 
 // Re-export MQ helpers so consumers can import from the package root.
 import * as _mq from "./mq";
+// Common package root exports
 
 // Interop: depending on how TS/tsx loads the module, the exports from
 // `./mq` may appear under a `default` object. Normalize here and
@@ -100,3 +119,10 @@ const event: any = (_event as any).default && Object.keys((_event as any).defaul
 
 export const QREventSchema = event.QREventSchema;
 export type { QREvent } from "./event";
+
+// Re-export cache helper
+export { getRedisClient } from "./cache";
+
+export {generateJwtToken, verifyJwtToken} from "./jwthelper";
+// Re-export authGuard supporting both named & default forms
+export { authGuard } from "./authguard";

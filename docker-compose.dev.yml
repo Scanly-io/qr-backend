@@ -1,0 +1,63 @@
+version: "3.9"
+
+services:
+  # Development overrides for auth-service
+  auth-service:
+    build:
+      target: builder  # Use builder stage for dev dependencies
+    environment:
+      - NODE_ENV=development
+    volumes:
+      # Mount source code for hot reload
+      - ./packages/common:/app/packages/common
+      - ./services/auth-service/src:/app/services/auth-service/src
+      - ./services/auth-service/package.json:/app/services/auth-service/package.json
+    command: ["npm", "run", "dev", "--workspace=@qr/auth-service"]
+
+  # Development overrides for qr-service
+  qr-service:
+    build:
+      target: builder
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ./packages/common:/app/packages/common
+      - ./services/qr-service/src:/app/services/qr-service/src
+      - ./services/qr-service/package.json:/app/services/qr-service/package.json
+    command: ["npm", "run", "dev", "--workspace=@qr/qr-service"]
+
+  # Development overrides for analytics-service
+  analytics-service:
+    build:
+      target: builder
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ./packages/common:/app/packages/common
+      - ./services/analytics-service/src:/app/services/analytics-service/src
+      - ./services/analytics-service/package.json:/app/services/analytics-service/package.json
+    command: ["npm", "run", "dev", "--workspace=@qr/analytics-service"]
+
+  # Development overrides for microsite-service
+  microsite-service:
+    build:
+      target: builder
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ./packages/common:/app/packages/common
+      - ./services/microsite-service/src:/app/services/microsite-service/src
+      - ./services/microsite-service/package.json:/app/services/microsite-service/package.json
+    command: ["npm", "run", "dev", "--workspace=@qr/microsite-service"]
+
+  # Development overrides for dlq-processor
+  dlq-processor:
+    build:
+      target: builder
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ./packages/common:/app/packages/common
+      - ./services/dlq-processor/src:/app/services/dlq-processor/src
+      - ./services/dlq-processor/package.json:/app/services/dlq-processor/package.json
+    command: ["npm", "run", "dev", "--workspace=@qr/dlq-processor"]

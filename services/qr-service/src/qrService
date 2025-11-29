@@ -1,0 +1,19 @@
+import QRCode from "qrcode";
+import {promises as fs} from 'fs';
+import path from 'path';
+
+async function generateQRCode(text: string, outputFilePath: string) {
+  try {
+    const qrCodeDataUrl = await QRCode.toDataURL(text, { errorCorrectionLevel: 'H' });
+    const base64Data = qrCodeDataUrl.replace(/^data:image\/png;base64,/, '');
+    await fs.writeFile(outputFilePath, base64Data, 'base64');
+    console.log(`QR code generated and saved to ${outputFilePath}`);
+  } catch (error) {
+    console.error('Error generating QR code:', error);
+  }
+}
+
+const qrText = 'https://example.com';
+const outputPath = path.join(__dirname, 'qrcode.png');
+
+generateQRCode(qrText, outputPath);

@@ -3,6 +3,8 @@ import { QREventSchema } from "@qr/common";
 import type { Consumer, Producer } from "kafkajs";
 import { scans } from "./schema";
 import { db } from "./db";
+import fastifySwagger from "@fastify/swagger";
+import fastifySwaggerUi from "@fastify/swagger-ui";
 
 console.log("starting analytics-service...");   
 process.env.SERVICE_NAME = "analytics-service";
@@ -10,6 +12,36 @@ const app = buildServer();
 const port = Number(process.env.PORT || 3004);
 let consumer: Consumer | null = null;
 let producer: Producer | null = null;
+
+// Register Swagger documentation
+app.register(fastifySwagger, {
+  openapi: {
+    info: {
+      title: "Analytics Service API",
+      description: "QR code scan analytics and reporting service",
+      version: "1.0.0",
+    },
+    servers: [
+      {
+        url: "http://localhost:3004",
+        description: "Development server",
+      },
+    ],
+    tags: [
+      { name: "Analytics", description: "Analytics operations" },
+      { name: "Health", description: "Health check endpoints" },
+    ],
+  },
+});
+
+app.register(fastifySwaggerUi, {
+  routePrefix: "/docs",
+  uiConfig: {
+    docExpansion: "list",
+    deepLinking: true,
+  },
+  staticCSP: true,
+});
 
 app.get("/analytics", async () => ({ service: "analytics-service", ok: true }));
 
@@ -25,7 +57,7 @@ async function createConsumerInstance() {
   try {
     consumer = await createConsumer("analytics-group");
     if (!consumer) throw new Error("Consumer not initialized");
-    // Example of subscribing to a topic (not used yet)
+    
     await consumer.subscribe({ topic: "qr.events", fromBeginning: true });
     await consumer.run({
       eachMessage: async ({ topic, partition, message }) => {
@@ -46,14 +78,12 @@ async function createConsumerInstance() {
             logger.error({ err }, "Failed to store scan event");    
         }
         logger.info({ event: "mq.message.received", topic, partition }, "Message received from MQ");
-      console.log("Received event from Redpanda:", value); 
+        console.log("Received event from Redpanda:", value); 
       }
     });
     logger.info("Consumer created and subscribed to qr.events");
-    if (Math.random() < 0.3) {
-      throw new Error("Simulated consumer failure");
-    }
   } catch (err) {
+    logger.error({ err }, "Failed to create consumer");
     if (producer) {
       await producer.send({
         topic: "analytics.errors",
@@ -68,8 +98,6 @@ async function createConsumerInstance() {
         ],
       });
     }
-    logger.error("Failed to create consumer");
-    // don't crash the service on MQ init failure; continue running
   }
 }
 

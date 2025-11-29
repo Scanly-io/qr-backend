@@ -1,0 +1,34 @@
+# Prometheus configuration for QR backend services
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # QR Service metrics
+  - job_name: 'qr-service'
+    static_configs:
+      - targets: ['host.docker.internal:3002']
+        labels:
+          service: 'qr-service'
+          environment: 'dev'
+
+  # Analytics Service metrics
+  - job_name: 'analytics-service'
+    static_configs:
+      - targets: ['host.docker.internal:3004']
+        labels:
+          service: 'analytics-service'
+          environment: 'dev'
+
+  # DLQ Processor metrics
+  - job_name: 'dlq-processor'
+    static_configs:
+      - targets: ['host.docker.internal:3005']
+        labels:
+          service: 'dlq-processor'
+          environment: 'dev'
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

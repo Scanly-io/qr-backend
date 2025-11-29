@@ -10,15 +10,20 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: qr_analytics
+      # Create multiple databases on init
+      POSTGRES_MULTIPLE_DATABASES: auth_service,microsite_service,qr_service,qr_analytics
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - qr_network
 
   # --- Redpanda (Kafka-compatible MQ) ---
   redpanda:
@@ -42,6 +47,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    networks:
+      - qr_network
 
   # --- Redis (optional, for caching) ---
   redis:
@@ -49,8 +56,156 @@ services:
     container_name: qr_redis
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     restart: always
+    networks:
+      - qr_network
+
+  # --- Prometheus (metrics collection) ---
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: qr_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    restart: always
+    networks:
+      - qr_network
+
+  # --- Grafana (metrics visualization) ---
+  grafana:
+    image: grafana/grafana:latest
+    container_name: qr_grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+    restart: always
+    networks:
+      - qr_network
+
+  # --- Auth Service ---
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    container_name: qr_auth_service
+    ports:
+      - "3001:3001"
+    env_file:
+      - .env.docker
+      - services/auth-service/.env.docker
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - qr_network
+
+  # --- QR Service ---
+  qr-service:
+    build:
+      context: .
+      dockerfile: services/qr-service/Dockerfile
+    container_name: qr_qr_service
+    ports:
+      - "3002:3002"
+    env_file:
+      - .env.docker
+      - services/qr-service/.env.docker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - qr_network
+
+  # --- Analytics Service ---
+  analytics-service:
+    build:
+      context: .
+      dockerfile: services/analytics-service/Dockerfile
+    container_name: qr_analytics_service
+    ports:
+      - "3004:3004"
+    env_file:
+      - .env.docker
+      - services/analytics-service/.env.docker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - qr_network
+
+  # --- Microsite Service ---
+  microsite-service:
+    build:
+      context: .
+      dockerfile: services/microsite-service/Dockerfile
+    container_name: qr_microsite_service
+    ports:
+      - "3005:3005"
+    env_file:
+      - .env.docker
+      - services/microsite-service/.env.docker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - qr_network
+
+  # --- DLQ Processor ---
+  dlq-processor:
+    build:
+      context: .
+      dockerfile: services/dlq-processor/Dockerfile
+    container_name: qr_dlq_processor
+    env_file:
+      - .env.docker
+      - services/dlq-processor/.env.docker
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - qr_network
+
+networks:
+  qr_network:
+    driver: bridge
 
 volumes:
   pgdata:
+  redis_data:
   redpanda_data:
+  prometheus_data:
+  grafana_data:
