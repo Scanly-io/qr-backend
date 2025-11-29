@@ -1,0 +1,11 @@
+{
+  "name": "@qr/dlq-processor",
+  "version": "1.0.0",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@qr/common": "file:../../packages/common"
+  }
+}

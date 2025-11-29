@@ -1,0 +1,25 @@
+{
+  "name": "qr-backend",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "services/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace=@qr/qr-service\" \"npm run dev --workspace=@qr/analytics-service\""
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.24",
+    "concurrently": "^9.0.0",
+    "drizzle-kit": "^0.31.6",
+    "tsx": "^4.7.0",
+    "typescript": "^5.5.4"
+  },
+  "dependencies": {
+    "@qr/common": "^1.0.0",
+    "@types/pg": "^8.15.6",
+    "drizzle-orm": "^0.44.7",
+    "pg": "^8.16.3",
+    "studio": "^0.13.5"
+  }
+}
