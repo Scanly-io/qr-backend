@@ -26,10 +26,16 @@ export function buildServer(serviceName?: string) {
     logger: {
       level: process.env.LOG_LEVEL || "info",
     },
+    bodyLimit: 10 * 1024 * 1024, // 10MB limit (default is 1MB)
   });
 
   // CORS: allow all in dev (customize later)
-  app.register(cors, { origin: true });
+  app.register(cors, { 
+    origin: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With'],
+    credentials: true
+  });
 
   // Add a simple /health endpoint for all services
   app.get("/health", async () => ({
@@ -93,8 +99,8 @@ export function buildServer(serviceName?: string) {
   return app;
 }
 
-// Re-export logger for convenience
-export { logger } from "./logger";
+// Re-export logger and child logger helper
+export { logger, createChildLogger } from "./logger";
 
 // Re-export MQ helpers so consumers can import from the package root.
 import * as _mq from "./mq";
@@ -123,6 +129,18 @@ export type { QREvent } from "./event";
 // Re-export cache helper
 export { getRedisClient } from "./cache";
 
-export {generateJwtToken, verifyJwtToken} from "./jwthelper";
+export {
+  generateJwtToken, 
+  verifyJwtToken,
+  generateAccessToken,
+  generateRefreshToken,
+  verifyAccessToken,
+  verifyRefreshToken,
+  verifyJWT
+} from "./jwthelper";
 // Re-export authGuard supporting both named & default forms
 export { authGuard } from "./authguard";
+
+// Re-export error handling with DLQ
+export { withDLQ, withDLQSync } from "./errorHandler";
+export type { DLQContext, Result } from "./errorHandler";

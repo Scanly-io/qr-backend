@@ -1,21 +1,22 @@
 import { db } from "../db.js";
 import { microsites } from "../schema.js";
 import { eq } from "drizzle-orm";
-import { getRedisClient, authGuard } from "@qr/common";
+import { getRedisClient, verifyJWT, withDLQ } from "@qr/common";
 import { micrositeCacheKey } from "../utils/cachedKeys.js";
 import { renderMicrosite } from "../utils/render.js";
+export const CACHE_VERSION = "v2"; // Bump this number
 
 // Canonical publish route (cleaned of temporary debug logs)
 export default async function publishRoutes(app: any) {
   app.post("/microsite/:qrId/publish", {
-    preHandler: async (req: any, reply: any) => { await authGuard(req, reply); },
+    preHandler: [verifyJWT],
     schema: {
       tags: ["Microsites"],
       summary: "Publish a microsite's HTML",
       security: [{ bearerAuth: [] }],
       params: {
         type: "object",
-        properties: { qrId: { type: "string" } },
+        properties: { qrId: { type: "string", description: "QR ID or Microsite ID (UUID)" } },
         required: ["qrId"]
       },
       response: {
@@ -28,25 +29,88 @@ export default async function publishRoutes(app: any) {
     }
   }, async (req: any, reply: any) => {
     const { qrId } = req.params;
-    const user = (req as any).user;
+    const user = req.user;
     if (!user) return reply.code(401).send({ error: "Unauthenticated" });
 
-    let siteRows: any[] = [];
-    try {
-      siteRows = await db.select().from(microsites).where(eq(microsites.qrId, qrId)).limit(1);
-    } catch (err: any) {
-      req.log?.error({ err }, "publish DB fetch error");
-      return reply.code(500).send({ error: "DB error" });
+    // Try to fetch by qrId first, then by id (UUID) as fallback
+    const fetchResult = await withDLQ(
+      async () => {
+        // Try qrId first
+        let results = await db.select().from(microsites).where(eq(microsites.qrId, qrId)).limit(1);
+        
+        // If not found, try as microsite id (UUID)
+        if (results.length === 0) {
+          results = await db.select().from(microsites).where(eq(microsites.id, qrId)).limit(1);
+        }
+        
+        return results;
+      },
+      {
+        service: "microsite",
+        operation: "microsite.fetch",
+        metadata: { qrId, userId: user.id },
+      }
+    );
+
+    if (!fetchResult.success) {
+      return reply.code(500).send({ error: "Failed to fetch microsite" });
     }
-    const site = siteRows[0];
+
+    const site = fetchResult.data[0];
     if (!site) return reply.code(404).send({ error: "Microsite not found" });
     if (site.createdBy && site.createdBy !== user.id) return reply.code(403).send({ error: "Forbidden" });
 
-    const html = (await renderMicrosite(site)) ?? "";
-    await db.update(microsites).set({ publishedHtml: html, publishedAt: new Date() }).where(eq(microsites.qrId, qrId));
+    // Render microsite with error handling
+    const renderResult = await withDLQ(
+      async () => {
+        const html = (await renderMicrosite(site)) ?? "";
+        return html;
+      },
+      {
+        service: "microsite",
+        operation: "microsite.render",
+        metadata: { qrId, layout: site.layout },
+      }
+    );
 
-    const cache = await getRedisClient();
-    await cache.set(micrositeCacheKey(qrId), html);
+    if (!renderResult.success) {
+      return reply.code(500).send({ error: "Failed to render microsite" });
+    }
+
+    const html = renderResult.data;
+
+    // Update database with error handling (use site.id, not param qrId)
+    const updateResult = await withDLQ(
+      () => db.update(microsites).set({ publishedHtml: html, publishedAt: new Date() }).where(eq(microsites.id, site.id)),
+      {
+        service: "microsite",
+        operation: "microsite.publish",
+        metadata: { qrId: site.qrId, micrositeId: site.id, htmlLength: html.length },
+      }
+    );
+
+    if (!updateResult.success) {
+      return reply.code(500).send({ error: "Failed to publish microsite" });
+    }
+
+    // Cache with error handling (non-critical, just log if fails)
+    // Use the actual qrId from database, not the param (which might be micrositeId)
+    const actualQrId = site.qrId || qrId;
+    const cacheResult = await withDLQ(
+      async () => {
+        const cache = await getRedisClient();
+        await cache.set(`${micrositeCacheKey(actualQrId)}:${CACHE_VERSION}`, html);
+      },
+      {
+        service: "microsite",
+        operation: "microsite.cache",
+        metadata: { qrId: actualQrId },
+      }
+    );
+
+    if (!cacheResult.success) {
+      req.log?.warn({ qrId }, "Published but cache update failed");
+    }
 
     return { message: "Published successfully", length: html.length };
   });

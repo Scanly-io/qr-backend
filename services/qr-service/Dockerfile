@@ -2,6 +2,17 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
 
+# Install build dependencies for canvas (native module)
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    cairo-dev \
+    jpeg-dev \
+    pango-dev \
+    giflib-dev \
+    pixman-dev
+
 # Copy root package files for workspace setup
 COPY package*.json ./
 COPY tsconfig.json ./
@@ -10,17 +21,15 @@ COPY tsconfig.json ./
 COPY packages/common/package.json ./packages/common/
 COPY services/qr-service/package.json ./services/qr-service/
 
-# Install dependencies
-RUN npm ci --workspace=@qr/qr-service --workspace=@qr/common
+# Install dependencies (workspaces hoist to root node_modules)
+RUN npm ci
 
 # Stage 2: Builder
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Copy dependencies from deps stage
+# Copy dependencies from deps stage (only root node_modules exists)
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/packages/common/node_modules ./packages/common/node_modules
-COPY --from=deps /app/services/qr-service/node_modules ./services/qr-service/node_modules
 
 # Copy source code
 COPY tsconfig.json ./
@@ -31,13 +40,16 @@ COPY services/qr-service ./services/qr-service
 FROM node:20-alpine AS runtime
 WORKDIR /app
 
-# Install production dependencies only
-COPY package*.json ./
-COPY tsconfig.json ./
-COPY packages/common/package.json ./packages/common/
-COPY services/qr-service/package.json ./services/qr-service/
+# Install runtime dependencies for canvas
+RUN apk add --no-cache \
+    cairo \
+    jpeg \
+    pango \
+    giflib \
+    pixman
 
-RUN npm ci --workspace=@qr/qr-service --workspace=@qr/common --omit=dev
+# Copy all dependencies from deps stage
+COPY --from=deps /app/node_modules ./node_modules
 
 # Copy built application
 COPY --from=builder /app/packages/common ./packages/common
@@ -55,4 +67,4 @@ USER nodejs
 
 EXPOSE 3002
 
-CMD ["node", "--loader", "tsx", "src/index.ts"]
+CMD ["node", "--import", "tsx", "src/index.ts"]

@@ -1,4 +1,4 @@
-import { authGuard, verifyJwtToken } from "@qr/common";
+import { verifyJWT } from "@qr/common";
 import { db, users } from "../db.js";
 import { eq } from "drizzle-orm";
 
@@ -40,13 +40,14 @@ export default async function meRoutes(app: any) {
         },
       },
     },
-    preHandler: [authGuard],
+    preHandler: [verifyJWT], // Use the new JWT middleware
   }, async (req:any, reply: any) => {
     try {
-      const payload = verifyJwtToken(req.headers.authorization!.slice(7));
+      // The user is now attached to req.user by the verifyJWT middleware
+      const userId = req.user.id;
 
       const user = await db.query.users.findFirst({
-        where: eq(users.id, payload.sub)
+        where: eq(users.id, userId)
       });
 
       if (!user) return reply.code(404).send({ error: "User not found" });

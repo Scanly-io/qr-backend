@@ -1,5 +1,5 @@
 import { db, users } from "../db.js";
-import { generateJwtToken } from "@qr/common";
+import { generateAccessToken, generateRefreshToken } from "@qr/common";
 import argon2 from "argon2";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -27,7 +27,15 @@ export default async function loginRoutes(app: any) {
           description: "Login successful",
           type: "object",
           properties: {
-            token: { type: "string", description: "JWT authentication token" },
+            accessToken: { type: "string", description: "JWT access token (15min)" },
+            refreshToken: { type: "string", description: "JWT refresh token (7d)" },
+            user: {
+              type: "object",
+              properties: {
+                id: { type: "string" },
+                email: { type: "string" },
+              },
+            },
           },
         },
         400: {
@@ -68,7 +76,17 @@ export default async function loginRoutes(app: any) {
       return reply.code(401).send({ error: "Invalid credentials" });
     }
 
-  const token = generateJwtToken({ sub: user.id, email: user.email });
-  reply.send({ token });
+    // Generate both access and refresh tokens
+    const accessToken = generateAccessToken({ id: user.id, email: user.email });
+    const refreshToken = generateRefreshToken({ id: user.id });
+
+    reply.send({ 
+      accessToken,
+      refreshToken,
+      user: {
+        id: user.id,
+        email: user.email,
+      }
+    });
   });
 }

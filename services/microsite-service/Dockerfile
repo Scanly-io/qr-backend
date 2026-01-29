@@ -10,17 +10,15 @@ COPY tsconfig.json ./
 COPY packages/common/package.json ./packages/common/
 COPY services/microsite-service/package.json ./services/microsite-service/
 
-# Install dependencies
-RUN npm ci --workspace=@qr/microsite-service --workspace=@qr/common
+# Install dependencies (workspaces hoist to root node_modules)
+RUN npm ci
 
 # Stage 2: Builder
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Copy dependencies from deps stage
+# Copy dependencies from deps stage (only root node_modules exists)
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/packages/common/node_modules ./packages/common/node_modules
-COPY --from=deps /app/services/microsite-service/node_modules ./services/microsite-service/node_modules
 
 # Copy source code
 COPY tsconfig.json ./
@@ -31,13 +29,8 @@ COPY services/microsite-service ./services/microsite-service
 FROM node:20-alpine AS runtime
 WORKDIR /app
 
-# Install production dependencies only
-COPY package*.json ./
-COPY tsconfig.json ./
-COPY packages/common/package.json ./packages/common/
-COPY services/microsite-service/package.json ./services/microsite-service/
-
-RUN npm ci --workspace=@qr/microsite-service --workspace=@qr/common --omit=dev
+# Copy all dependencies from deps stage
+COPY --from=deps /app/node_modules ./node_modules
 
 # Copy built application
 COPY --from=builder /app/packages/common ./packages/common
@@ -55,4 +48,4 @@ USER nodejs
 
 EXPOSE 3005
 
-CMD ["node", "--loader", "tsx", "src/index.ts"]
+CMD ["node", "--import", "tsx", "src/index.ts"]

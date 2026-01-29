@@ -1,0 +1,26 @@
+{
+  "name": "@qr/pixels-service",
+  "version": "1.0.0",
+  "description": "Retargeting pixel management microservice",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@fastify/swagger": "^9.6.1",
+    "@fastify/swagger-ui": "^5.2.3",
+    "@qr/common": "file:../../packages/common",
+    "dotenv": "^17.2.3",
+    "drizzle-orm": "^0.44.7",
+    "fastify": "^5.6.1",
+    "kafkajs": "^2.2.4",
+    "pg": "^8.11.3",
+    "pino": "^10.1.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.19",
+    "tsx": "^4.8.1"
+  }
+}

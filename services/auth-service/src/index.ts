@@ -1,19 +1,25 @@
-import { buildServer, logger } from "@qr/common";
 import dotenv from "dotenv";
+// Load environment variables BEFORE importing anything from @qr/common
+dotenv.config();
+
+import { buildServer, logger } from "@qr/common";
 import loginRoutes from "./routes/login.js";  
 import meRoutes from "./routes/me.js";  
 import signupRoutes from "./routes/signup.js";
+import refreshRoutes from "./routes/refresh.js";
 import fastifySwagger from "@fastify/swagger";
 import fastifySwaggerUi from "@fastify/swagger-ui";
+import type { FastifyInstance } from "fastify";
 
-dotenv.config();   
-console.log("starting auth-service...");
-process.env.SERVICE_NAME = "auth-service";
-const app = buildServer();
-const port = Number(process.env.PORT || 3001);
-
-// Register Swagger documentation
-app.register(fastifySwagger, {
+/**
+ * Build and configure the Fastify app
+ * Exported for testing purposes
+ */
+export async function buildApp(): Promise<FastifyInstance> {
+  const app = buildServer();
+  
+  // Register Swagger documentation
+  await app.register(fastifySwagger, {
   openapi: {
     info: {
       title: "Auth Service API",
@@ -43,23 +49,39 @@ app.register(fastifySwagger, {
   },
 });
 
-app.register(fastifySwaggerUi, {
-  routePrefix: "/docs",
-  uiConfig: {
-    docExpansion: "list",
-    deepLinking: true,
-  },
-  staticCSP: true,
-});
+await app.register(fastifySwaggerUi, {
+    routePrefix: "/docs",
+    uiConfig: {
+      docExpansion: "list",
+      deepLinking: true,
+    },
+    staticCSP: true,
+  });
 
-app.register(loginRoutes);
-app.register(meRoutes);
-app.register(signupRoutes);
+  await app.register(loginRoutes);
+  await app.register(meRoutes);
+  await app.register(signupRoutes);
+  await app.register(refreshRoutes);
 
-app.get("/auth", async () => ({ service: "auth-service", ok: true }));
-app.listen({ port })
-  .then(() => logger.info(`Auth service running on :${port} <- auth-service`))
-  .catch((err) => {
-    logger.error("Failed to start server", err && err.stack ? err.stack : err);
-    process.exit(1);
-  });   
+  app.get("/auth", async () => ({ service: "auth-service", ok: true }));
+  
+  return app;
+}
+
+// Only start server if this file is run directly (not imported for tests)
+if (import.meta.url === `file://${process.argv[1]}`) {
+  console.log("starting auth-service...");
+  process.env.SERVICE_NAME = "auth-service";
+  const port = Number(process.env.PORT || 3001);
+  
+  buildApp()
+    .then((app) => {
+      return app.listen({ port, host: '0.0.0.0' }).then(() => port);
+    })
+    .then((port) => logger.info(`Auth service running on :${port} <- auth-service`))
+    .catch((err) => {
+      console.error("Failed to start server:", err);
+      logger.error("Failed to start server", err);
+      process.exit(1);
+    });
+}   

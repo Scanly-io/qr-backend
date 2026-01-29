@@ -7,17 +7,38 @@ async function startDLQProcessor() {
   consumer = await createConsumer("dlq-processor-group");
   if (!consumer) throw new Error("Consumer not initialized");
 
-  await consumer.subscribe({ topic: "qr.events.dlq", fromBeginning: true });
+  // Subscribe to all error/DLQ topics from different services
+  await consumer.subscribe({ 
+    topics: [
+      "qr.errors",            // QR service errors
+      "analytics.errors",     // Analytics service errors
+      "microsite.errors",     // Microsite service errors
+    ], 
+    fromBeginning: true 
+  });
 
   await consumer.run({
-    eachMessage: async ({ message }) => {
+    eachMessage: async ({ topic, partition, message }) => {
       const failedMessage = message.value?.toString();
-      logger.warn({ failedMessage }, "DLQ message received");
-      // here you can save to DB, send Slack alert, or trigger retry
+      const errorType = message.headers?.["x-event-type"]?.toString() || "unknown";
+      
+      logger.warn({ 
+        topic,
+        partition,
+        errorType,
+        failedMessage 
+      }, "DLQ message received");
+      
+      // TODO: Implement retry logic, save to DB, or send alerts
+      // Example actions:
+      // - Parse error and determine if retryable
+      // - Store in error database for investigation
+      // - Send Slack/email alert for critical errors
+      // - Trigger manual review workflow
     },
   });
   
-  logger.info("DLQ Processor started and subscribed to qr.events.dlq");
+  logger.info("DLQ Processor started and subscribed to error topics: qr.errors, analytics.errors, microsite.errors");
 }
 
 startDLQProcessor().catch((err) => {

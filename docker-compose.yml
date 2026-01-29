@@ -11,7 +11,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: qr_analytics
       # Create multiple databases on init
-      POSTGRES_MULTIPLE_DATABASES: auth_service,microsite_service,qr_service,qr_analytics
+      POSTGRES_MULTIPLE_DATABASES: auth_service,microsite_service,qr_service,qr_analytics,domains_db,pixels_db,routing_db,creator_db,integrations_db,asset_db,print_studio_db,workflow_db
     ports:
       - "5432:5432"
     volumes:
@@ -36,7 +36,7 @@ services:
       - --overprovisioned
       - --node-id 0
       - --kafka-addr 0.0.0.0:9092
-      - --advertise-kafka-addr 127.0.0.1:9092
+      - --advertise-kafka-addr redpanda:9092
     ports:
       - "9092:9092"
       - "9644:9644" # admin API
@@ -102,6 +102,38 @@ services:
     restart: always
     networks:
       - qr_network
+
+  # --- Nginx API Gateway ---
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: qr_nginx_gateway
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - auth-service
+      - qr-service
+      - analytics-service
+      - microsite-service
+      - domains-service
+      - pixels-service
+      - routing-service
+    restart: always
+    networks:
+      - qr_network
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - nginx_cache:/var/cache/nginx
+      # Uncomment for production SSL certificates
+      # - ./nginx/ssl:/etc/nginx/ssl:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
 
   # --- Auth Service ---
   auth-service:
@@ -199,6 +231,247 @@ services:
     networks:
       - qr_network
 
+  # --- Domains Service ---
+  domains-service:
+    build:
+      context: .
+      dockerfile: services/domains-service/Dockerfile
+    container_name: qr_domains_service
+    ports:
+      - "3010:3010"
+    env_file:
+      - .env.docker
+      - services/domains-service/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - qr_network
+
+  # --- Pixels Service ---
+  pixels-service:
+    build:
+      context: .
+      dockerfile: services/pixels-service/Dockerfile
+    container_name: qr_pixels_service
+    ports:
+      - "3011:3011"
+    env_file:
+      - .env.docker
+      - services/pixels-service/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - qr_network
+
+  # --- Routing Service ---
+  routing-service:
+    build:
+      context: .
+      dockerfile: services/routing-service/Dockerfile
+    container_name: qr_routing_service
+    ports:
+      - "3012:3012"
+    env_file:
+      - .env.docker
+      - services/routing-service/.env.docker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - qr_network
+
+  # --- ML Service ---
+  ml-service:
+    build:
+      context: .
+      dockerfile: services/ml-service/Dockerfile
+    container_name: qr_ml_service
+    ports:
+      - "3016:3016"
+    environment:
+      - PORT=3016
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/postgres
+      - KAFKA_ENABLED=false
+      - HTTP_ONLY=true
+      - NODE_ENV=production
+      - OPENAI_API_KEY=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
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - qr_network
+
+  # --- Integrations Service ---
+  integrations-service:
+    build:
+      context: .
+      dockerfile: services/integrations-service/Dockerfile
+    container_name: qr_integrations_service
+    ports:
+      - "3014:3014"
+    environment:
+      - PORT=3014
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/integrations_db
+      - REDIS_URL=redis://redis:6379
+      - KAFKA_ENABLED=false
+      - KAFKA_BROKER=redpanda:9092
+      - NODE_ENV=production
+      - JWT_SECRET=${JWT_SECRET:-docker-dev-secret-change-in-production}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - qr_network
+
+  # --- Media Service (File Uploads) ---
+  media-service:
+    build:
+      context: .
+      dockerfile: services/media-service/Dockerfile
+    container_name: qr_media_service
+    ports:
+      - "3025:3025"
+    environment:
+      - PORT=3025
+      - NODE_ENV=production
+      - USE_R2=${USE_R2:-false}
+      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
+      - R2_BUCKET_NAME=${R2_BUCKET_NAME:-qr-platform-assets}
+      - R2_PUBLIC_URL=${R2_PUBLIC_URL}
+      - LOCAL_UPLOAD_DIR=/uploads
+      - MAX_FILE_SIZE=10485760
+    volumes:
+      - media_uploads:/uploads
+    restart: unless-stopped
+    networks:
+      - qr_network
+
+  # --- Creator Service ---
+  creator-service:
+    build:
+      context: .
+      dockerfile: services/creator-service/Dockerfile
+    container_name: qr_creator_service
+    ports:
+      - "3020:3020"
+    environment:
+      - PORT=3020
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/creator_db
+      - JWT_SECRET=${JWT_SECRET:-docker-dev-secret-change-in-production}
+      - NODE_ENV=production
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - INSTAGRAM_API_KEY=${INSTAGRAM_API_KEY}
+      - FACEBOOK_API_KEY=${FACEBOOK_API_KEY}
+      - TWITTER_API_KEY=${TWITTER_API_KEY}
+      - TIKTOK_API_KEY=${TIKTOK_API_KEY}
+      - LINKEDIN_API_KEY=${LINKEDIN_API_KEY}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - qr_network
+
+  # --- Asset Management Service ---
+  asset-service:
+    build:
+      context: .
+      dockerfile: services/asset-service/Dockerfile
+    container_name: qr_asset_service
+    ports:
+      - "3021:3021"
+    environment:
+      - PORT=3021
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/asset_db
+      - JWT_SECRET=${JWT_SECRET:-docker-dev-secret-change-in-production}
+      - NODE_ENV=production
+      - PUBLIC_URL=${PUBLIC_URL:-https://app.scanly.io}
+      - SERVICENOW_API_URL=${SERVICENOW_API_URL}
+      - SERVICENOW_API_KEY=${SERVICENOW_API_KEY}
+      - SALESFORCE_API_URL=${SALESFORCE_API_URL}
+      - SALESFORCE_API_KEY=${SALESFORCE_API_KEY}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
+      - TEAMS_WEBHOOK_URL=${TEAMS_WEBHOOK_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - qr_network
+
+  print-studio:
+    build:
+      context: .
+      dockerfile: services/print-studio/Dockerfile
+    container_name: qr_print_studio
+    ports:
+      - "3022:3022"
+    environment:
+      - PORT=3022
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/print_studio_db
+      - JWT_SECRET=${JWT_SECRET:-docker-dev-secret-change-in-production}
+      - NODE_ENV=production
+      - CLOUDFLARE_R2_ENDPOINT=${CLOUDFLARE_R2_ENDPOINT}
+      - CLOUDFLARE_R2_ACCESS_KEY=${CLOUDFLARE_R2_ACCESS_KEY}
+      - CLOUDFLARE_R2_SECRET_KEY=${CLOUDFLARE_R2_SECRET_KEY}
+      - CLOUDFLARE_R2_BUCKET=${CLOUDFLARE_R2_BUCKET:-qr-print-pdfs}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - qr_network
+
+  workflow-builder:
+    build:
+      context: .
+      dockerfile: services/workflow-builder/Dockerfile
+    container_name: qr_workflow_builder
+    ports:
+      - "3023:3023"
+    environment:
+      - PORT=3023
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/workflow_db
+      - JWT_SECRET=${JWT_SECRET:-docker-dev-secret-change-in-production}
+      - NODE_ENV=production
+      - REDIS_URL=redis://redis:6379
+      - SERVICENOW_API_URL=${SERVICENOW_API_URL}
+      - SERVICENOW_API_KEY=${SERVICENOW_API_KEY}
+      - SALESFORCE_API_URL=${SALESFORCE_API_URL}
+      - SALESFORCE_API_KEY=${SALESFORCE_API_KEY}
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
+      - TEAMS_WEBHOOK_URL=${TEAMS_WEBHOOK_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - qr_network
+
 networks:
   qr_network:
     driver: bridge
@@ -209,3 +482,5 @@ volumes:
   redpanda_data:
   prometheus_data:
   grafana_data:
+  nginx_cache:
+  media_uploads:

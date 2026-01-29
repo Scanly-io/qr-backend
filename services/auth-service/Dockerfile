@@ -10,17 +10,15 @@ COPY tsconfig.json ./
 COPY packages/common/package.json ./packages/common/
 COPY services/auth-service/package.json ./services/auth-service/
 
-# Install dependencies
-RUN npm ci --workspace=@qr/auth-service --workspace=@qr/common
+# Install dependencies (workspaces hoist to root node_modules)
+RUN npm ci
 
 # Stage 2: Builder
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Copy dependencies from deps stage
+# Copy dependencies from deps stage (only root node_modules exists)
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/packages/common/node_modules ./packages/common/node_modules
-COPY --from=deps /app/services/auth-service/node_modules ./services/auth-service/node_modules
 
 # Copy source code
 COPY tsconfig.json ./
@@ -34,13 +32,8 @@ COPY services/auth-service ./services/auth-service
 FROM node:20-alpine AS runtime
 WORKDIR /app
 
-# Install production dependencies only
-COPY package*.json ./
-COPY tsconfig.json ./
-COPY packages/common/package.json ./packages/common/
-COPY services/auth-service/package.json ./services/auth-service/
-
-RUN npm ci --workspace=@qr/auth-service --workspace=@qr/common --omit=dev
+# Copy all dependencies from deps stage
+COPY --from=deps /app/node_modules ./node_modules
 
 # Copy built application
 COPY --from=builder /app/packages/common ./packages/common
@@ -58,4 +51,5 @@ USER nodejs
 
 EXPOSE 3001
 
-CMD ["node", "--loader", "tsx", "src/index.ts"]
+CMD ["node", "--import", "tsx", "src/index.ts"]
+
