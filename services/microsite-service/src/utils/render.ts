@@ -1809,6 +1809,694 @@ function renderBlock(block: any, theme?: any) {
         </footer>
       `;
     }
+
+    case "features": {
+      const featureItems = content.items || [];
+      const columns = content.columns || 3;
+      const iconSize = content.iconSize || "md";
+      const layout = content.layout || "grid";
+      const cardStyle = content.cardStyle || "card";
+      
+      const themeColor = theme?.branding?.primaryColor || theme?.button?.backgroundColor || "#8b5cf6";
+      const themeColorDark = adjustColorBrightness(themeColor, -15);
+      
+      const columnClass = {
+        1: "grid-cols-1",
+        2: "grid-cols-1 sm:grid-cols-2",
+        3: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
+        4: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
+      }[columns] || "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3";
+      
+      const iconSizeClass = {
+        sm: "w-8 h-8",
+        md: "w-12 h-12",
+        lg: "w-16 h-16",
+        xl: "w-20 h-20"
+      }[iconSize] || "w-12 h-12";
+      
+      return `
+        <div class="features-block w-full px-4 py-8">
+          <div class="grid ${columnClass} gap-6">
+            ${featureItems.map((item: any) => {
+              const iconHtml = item.icon ? `
+                <div class="${iconSizeClass} mb-4 flex items-center justify-center rounded-full" style="background: linear-gradient(135deg, ${themeColor}, ${themeColorDark}); color: white;">
+                  <span class="text-2xl">${item.icon.length <= 2 ? item.icon : '✨'}</span>
+                </div>
+              ` : "";
+              
+              return `
+                <div class="feature-item flex flex-col items-center text-center p-6 rounded-lg transition-all duration-300 ${
+                  cardStyle === 'card' ? 'bg-white shadow-sm hover:shadow-md' : 
+                  cardStyle === 'bordered' ? 'border-2 hover:border-opacity-80' : 
+                  'hover:bg-gray-50'
+                }" style="${cardStyle === 'bordered' ? `border-color: ${themeColor}33;` : ''}">
+                  ${iconHtml}
+                  <h3 class="text-lg font-semibold mb-2" style="color: ${themeColor};">${item.title || 'Feature'}</h3>
+                  <p class="text-sm text-gray-600">${item.description || ''}</p>
+                </div>
+              `;
+            }).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    case "hero": {
+      const heroTitle = content.title || "Welcome";
+      const heroSubtitle = content.subtitle || "";
+      const heroDescription = content.description || "";
+      const heroBackgroundImage = content.backgroundImage || "";
+      const heroBackgroundVideo = content.backgroundVideo || "";
+      const heroOverlayOpacity = content.overlayOpacity || 0.5;
+      const heroTextAlign = content.textAlign || "center";
+      const heroHeight = content.height || "500px";
+      const heroButtons = content.buttons || [];
+      
+      const themeColor = theme?.branding?.primaryColor || theme?.button?.backgroundColor || "#8b5cf6";
+      const themeColorDark = adjustColorBrightness(themeColor, -15);
+      
+      const alignClass = heroTextAlign === "left" ? "text-left items-start" : 
+                        heroTextAlign === "right" ? "text-right items-end" : 
+                        "text-center items-center";
+      
+      return `
+        <div class="hero-block relative w-full overflow-hidden" style="min-height: ${heroHeight};">
+          ${heroBackgroundImage ? `
+            <div class="absolute inset-0 bg-cover bg-center" style="background-image: url('${heroBackgroundImage}');"></div>
+          ` : ""}
+          ${heroBackgroundVideo ? `
+            <video class="absolute inset-0 w-full h-full object-cover" autoplay muted loop playsinline>
+              <source src="${heroBackgroundVideo}" type="video/mp4">
+            </video>
+          ` : ""}
+          <div class="absolute inset-0 bg-black" style="opacity: ${heroOverlayOpacity};"></div>
+          
+          <div class="relative z-10 h-full flex flex-col ${alignClass} justify-center px-4 sm:px-6 py-12 sm:py-20">
+            <h1 class="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4 max-w-4xl">
+              ${heroTitle}
+            </h1>
+            ${heroSubtitle ? `
+              <h2 class="text-xl sm:text-2xl md:text-3xl text-white/90 mb-4 max-w-3xl">
+                ${heroSubtitle}
+              </h2>
+            ` : ""}
+            ${heroDescription ? `
+              <p class="text-base sm:text-lg text-white/80 mb-8 max-w-2xl">
+                ${heroDescription}
+              </p>
+            ` : ""}
+            ${heroButtons.length > 0 ? `
+              <div class="flex flex-wrap gap-4 ${heroTextAlign === 'center' ? 'justify-center' : ''}">
+                ${heroButtons.map((btn: any) => `
+                  <a href="${btn.url || '#'}" 
+                     class="px-6 py-3 rounded-lg font-semibold transition-all duration-200 ${
+                       btn.style === 'outline' ? 'border-2 border-white text-white hover:bg-white hover:text-gray-900' : 
+                       'text-white hover:shadow-lg'
+                     }"
+                     style="${btn.style !== 'outline' ? `background-color: ${themeColor};` : ''}"
+                     ${btn.style !== 'outline' ? `onmouseover="this.style.backgroundColor='${themeColorDark}'" onmouseout="this.style.backgroundColor='${themeColor}'"` : ''}
+                  >
+                    ${btn.text || 'Learn More'}
+                  </a>
+                `).join("")}
+              </div>
+            ` : ""}
+          </div>
+        </div>
+      `;
+    }
+
+    case "payment": {
+      const paymentType = content.paymentType || "tip";
+      const paymentTitle = content.title || "Support Me";
+      const paymentDescription = content.description || "Your support helps me create more content!";
+      const paymentAmounts = content.amounts || [5, 10, 25, 50];
+      const paymentCustomAmount = content.allowCustomAmount !== false;
+      const paymentCurrency = content.currency || "USD";
+      const paymentStripeKey = content.stripePublicKey || "";
+      
+      const themeColor = theme?.branding?.primaryColor || theme?.button?.backgroundColor || "#8b5cf6";
+      const themeColorDark = adjustColorBrightness(themeColor, -15);
+      
+      return `
+        <div class="payment-block w-full px-4 py-8 bg-white rounded-lg shadow-sm" data-payment-block>
+          <div class="max-w-md mx-auto">
+            <h3 class="text-2xl font-bold mb-2 text-center" style="color: ${themeColor};">${paymentTitle}</h3>
+            ${paymentDescription ? `<p class="text-gray-600 text-center mb-6">${paymentDescription}</p>` : ""}
+            
+            <div class="space-y-4">
+              <div class="grid grid-cols-2 gap-3">
+                ${paymentAmounts.map((amount: number) => `
+                  <button 
+                    class="payment-amount-btn p-4 rounded-lg border-2 font-semibold text-lg transition-all hover:shadow-md"
+                    data-amount="${amount}"
+                    style="border-color: ${themeColor}33; color: ${themeColor};"
+                    onclick="this.classList.add('ring-2'); this.style.borderColor='${themeColor}'; Array.from(this.parentElement.children).forEach(b => { if(b !== this) { b.classList.remove('ring-2'); b.style.borderColor='${themeColor}33'; }});"
+                  >
+                    $${amount}
+                  </button>
+                `).join("")}
+              </div>
+              
+              ${paymentCustomAmount ? `
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">Custom Amount</label>
+                  <div class="relative">
+                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                    <input 
+                      type="number" 
+                      min="1" 
+                      step="1"
+                      class="w-full pl-8 pr-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2"
+                      placeholder="Enter amount"
+                      style="border-color: ${themeColor}33;"
+                      onfocus="this.style.borderColor='${themeColor}'; this.style.boxShadow='0 0 0 3px ${themeColor}22';"
+                      onblur="this.style.borderColor='${themeColor}33'; this.style.boxShadow='none';"
+                    />
+                  </div>
+                </div>
+              ` : ""}
+              
+              <button 
+                class="w-full py-4 rounded-lg text-white font-semibold text-lg transition-all hover:shadow-lg"
+                style="background-color: ${themeColor};"
+                onmouseover="this.style.backgroundColor='${themeColorDark}'"
+                onmouseout="this.style.backgroundColor='${themeColor}'"
+                onclick="alert('Payment integration requires Stripe setup. Contact support for configuration.');"
+              >
+                ${paymentType === 'tip' ? '💝 Send Tip' : paymentType === 'product' ? '🛒 Buy Now' : '💳 Pay Now'}
+              </button>
+              
+              <p class="text-xs text-gray-500 text-center">
+                Secure payment powered by Stripe
+              </p>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    case "map": {
+      const mapAddress = content.address || "";
+      const mapLatitude = content.latitude || 0;
+      const mapLongitude = content.longitude || 0;
+      const mapZoom = content.zoom || 15;
+      const mapHeight = content.height || "400px";
+      const mapTitle = content.title || "";
+      
+      const mapEmbedUrl = mapLatitude && mapLongitude 
+        ? `https://www.google.com/maps/embed/v1/place?key=YOUR_API_KEY&q=${mapLatitude},${mapLongitude}&zoom=${mapZoom}`
+        : mapAddress 
+        ? `https://www.google.com/maps/embed/v1/place?key=YOUR_API_KEY&q=${encodeURIComponent(mapAddress)}`
+        : "";
+      
+      return `
+        <div class="map-block w-full px-4 py-6">
+          ${mapTitle ? `<h3 class="text-xl font-bold mb-4">${mapTitle}</h3>` : ""}
+          ${mapEmbedUrl ? `
+            <iframe
+              src="${mapEmbedUrl}"
+              width="100%"
+              height="${mapHeight}"
+              style="border:0; border-radius: 12px;"
+              allowfullscreen=""
+              loading="lazy"
+              referrerpolicy="no-referrer-when-downgrade"
+            ></iframe>
+          ` : `
+            <div class="w-full rounded-lg bg-gray-100 flex items-center justify-center" style="height: ${mapHeight};">
+              <div class="text-center p-6">
+                <svg class="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <p class="text-gray-500">Map location: ${mapAddress || 'No address set'}</p>
+                <p class="text-xs text-gray-400 mt-2">Google Maps API key required for embed</p>
+              </div>
+            </div>
+          `}
+          ${mapAddress ? `
+            <div class="mt-4 text-center">
+              <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapAddress)}" 
+                 target="_blank" 
+                 rel="noopener noreferrer"
+                 class="inline-flex items-center gap-2 text-sm text-blue-600 hover:underline">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                </svg>
+                Get Directions
+              </a>
+            </div>
+          ` : ""}
+        </div>
+      `;
+    }
+
+    case "schedule": {
+      const scheduleTitle = content.title || "Book an Appointment";
+      const scheduleDescription = content.description || "";
+      const scheduleType = content.type || "calendly";
+      const scheduleUrl = content.url || "";
+      const scheduleHeight = content.height || "600px";
+      const scheduleShowForm = content.showForm !== false;
+      
+      const themeColor = theme?.branding?.primaryColor || theme?.button?.backgroundColor || "#8b5cf6";
+      
+      return `
+        <div class="schedule-block w-full px-4 py-8">
+          <div class="max-w-3xl mx-auto">
+            <h3 class="text-2xl font-bold mb-2 text-center" style="color: ${themeColor};">${scheduleTitle}</h3>
+            ${scheduleDescription ? `<p class="text-gray-600 text-center mb-6">${scheduleDescription}</p>` : ""}
+            
+            ${scheduleUrl && scheduleType === 'calendly' ? `
+              <div class="calendly-inline-widget" data-url="${scheduleUrl}" style="min-width:320px;height:${scheduleHeight};"></div>
+              <script type="text/javascript" src="https://assets.calendly.com/assets/external/widget.js" async></script>
+            ` : scheduleShowForm ? `
+              <div class="bg-white rounded-lg shadow-sm p-6 border-2" style="border-color: ${themeColor}22;">
+                <form class="space-y-4" onsubmit="event.preventDefault(); alert('Booking submitted! We will contact you shortly.');">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                    <input type="text" required class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2" style="border-color: ${themeColor}33;" />
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <input type="email" required class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2" style="border-color: ${themeColor}33;" />
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                    <input type="tel" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2" style="border-color: ${themeColor}33;" />
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Preferred Date</label>
+                    <input type="date" required class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2" style="border-color: ${themeColor}33;" />
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                    <textarea rows="3" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2" style="border-color: ${themeColor}33;"></textarea>
+                  </div>
+                  <button type="submit" class="w-full py-3 rounded-lg text-white font-semibold" style="background-color: ${themeColor};">
+                    📅 Request Booking
+                  </button>
+                </form>
+              </div>
+            ` : `
+              <div class="text-center p-12 bg-gray-50 rounded-lg">
+                <svg class="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <p class="text-gray-500">Configure Calendly URL or enable booking form</p>
+              </div>
+            `}
+          </div>
+        </div>
+      `;
+    }
+
+    case "product": {
+      const productName = content.name || "Product Name";
+      const productDescription = content.description || "";
+      const productPrice = content.price || "$0.00";
+      const productImage = content.image || "";
+      const productImages = content.images || [];
+      const productVariants = content.variants || [];
+      const productButtonText = content.buttonText || "Add to Cart";
+      const productBadge = content.badge || "";
+      
+      const themeColor = theme?.branding?.primaryColor || theme?.button?.backgroundColor || "#8b5cf6";
+      const themeColorDark = adjustColorBrightness(themeColor, -15);
+      
+      const allImages = productImage ? [productImage, ...productImages] : productImages;
+      
+      return `
+        <div class="product-block w-full px-4 py-8">
+          <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-lg overflow-hidden">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 p-6">
+              <div class="relative">
+                ${allImages.length > 0 ? `
+                  <img src="${allImages[0]}" alt="${productName}" class="w-full h-auto rounded-lg object-cover" />
+                  ${productBadge ? `
+                    <div class="absolute top-3 right-3 px-3 py-1 rounded-full text-white text-sm font-bold" style="background-color: ${themeColor};">
+                      ${productBadge}
+                    </div>
+                  ` : ""}
+                  ${allImages.length > 1 ? `
+                    <div class="mt-3 grid grid-cols-4 gap-2">
+                      ${allImages.slice(1, 5).map((img: string) => `
+                        <img src="${img}" alt="${productName}" class="w-full h-20 object-cover rounded cursor-pointer hover:opacity-80 transition" />
+                      `).join("")}
+                    </div>
+                  ` : ""}
+                ` : `
+                  <div class="w-full h-64 bg-gray-100 rounded-lg flex items-center justify-center">
+                    <svg class="w-16 h-16 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                `}
+              </div>
+              
+              <div class="flex flex-col">
+                <h3 class="text-2xl font-bold mb-2">${productName}</h3>
+                <div class="text-3xl font-bold mb-4" style="color: ${themeColor};">${productPrice}</div>
+                ${productDescription ? `<p class="text-gray-600 mb-6">${productDescription}</p>` : ""}
+                
+                ${productVariants.length > 0 ? `
+                  <div class="space-y-3 mb-6">
+                    ${productVariants.map((variant: any) => `
+                      <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">${variant.name}</label>
+                        <select class="w-full px-4 py-2 border rounded-lg" style="border-color: ${themeColor}33;">
+                          ${variant.options.map((opt: string) => `<option>${opt}</option>`).join("")}
+                        </select>
+                      </div>
+                    `).join("")}
+                  </div>
+                ` : ""}
+                
+                <button 
+                  class="w-full py-4 rounded-lg text-white font-semibold text-lg transition-all hover:shadow-lg mt-auto"
+                  style="background-color: ${themeColor};"
+                  onmouseover="this.style.backgroundColor='${themeColorDark}'"
+                  onmouseout="this.style.backgroundColor='${themeColor}'"
+                  onclick="alert('Product added to cart!');"
+                >
+                  ${productButtonText}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    case "shop": {
+      const shopTitle = content.title || "Our Products";
+      const shopProducts = content.products || [];
+      const shopColumns = content.columns || 3;
+      
+      const themeColor = theme?.branding?.primaryColor || theme?.button?.backgroundColor || "#8b5cf6";
+      const themeColorDark = adjustColorBrightness(themeColor, -15);
+      
+      const columnClass = {
+        2: "grid-cols-1 sm:grid-cols-2",
+        3: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
+        4: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
+      }[shopColumns] || "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3";
+      
+      return `
+        <div class="shop-block w-full px-4 py-8">
+          <h3 class="text-3xl font-bold mb-8 text-center" style="color: ${themeColor};">${shopTitle}</h3>
+          <div class="grid ${columnClass} gap-6">
+            ${shopProducts.map((product: any) => `
+              <div class="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+                ${product.image ? `
+                  <img src="${product.image}" alt="${product.name}" class="w-full h-48 object-cover" />
+                ` : `
+                  <div class="w-full h-48 bg-gray-100 flex items-center justify-center">
+                    <svg class="w-12 h-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                `}
+                <div class="p-4">
+                  <h4 class="font-semibold text-lg mb-1">${product.name || 'Product'}</h4>
+                  <p class="text-sm text-gray-600 mb-3 line-clamp-2">${product.description || ''}</p>
+                  <div class="flex items-center justify-between">
+                    <span class="text-xl font-bold" style="color: ${themeColor};">${product.price || '$0'}</span>
+                    <button 
+                      class="px-4 py-2 rounded-lg text-white font-medium transition-colors"
+                      style="background-color: ${themeColor};"
+                      onmouseover="this.style.backgroundColor='${themeColorDark}'"
+                      onmouseout="this.style.backgroundColor='${themeColor}'"
+                      onclick="alert('Added ${product.name} to cart!');"
+                    >
+                      Add to Cart
+                    </button>
+                  </div>
+                </div>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    case "artist": {
+      const artistName = content.artistName || "Artist Name";
+      const artistBio = content.bio || "";
+      const artistImage = content.image || "";
+      const artistTracks = content.tracks || [];
+      const artistSpotifyUrl = content.spotifyUrl || "";
+      const artistAppleMusicUrl = content.appleMusicUrl || "";
+      const artistSoundCloudUrl = content.soundCloudUrl || "";
+      
+      const themeColor = theme?.branding?.primaryColor || theme?.button?.backgroundColor || "#8b5cf6";
+      
+      return `
+        <div class="artist-block w-full px-4 py-8">
+          <div class="max-w-4xl mx-auto">
+            <div class="flex flex-col sm:flex-row gap-6 mb-8">
+              ${artistImage ? `
+                <img src="${artistImage}" alt="${artistName}" class="w-32 h-32 rounded-full object-cover mx-auto sm:mx-0" />
+              ` : ""}
+              <div class="flex-1 text-center sm:text-left">
+                <h3 class="text-3xl font-bold mb-2" style="color: ${themeColor};">${artistName}</h3>
+                ${artistBio ? `<p class="text-gray-600 mb-4">${artistBio}</p>` : ""}
+                <div class="flex gap-3 justify-center sm:justify-start">
+                  ${artistSpotifyUrl ? `
+                    <a href="${artistSpotifyUrl}" target="_blank" class="px-4 py-2 bg-green-500 text-white rounded-full text-sm font-medium hover:bg-green-600">
+                      🎵 Spotify
+                    </a>
+                  ` : ""}
+                  ${artistAppleMusicUrl ? `
+                    <a href="${artistAppleMusicUrl}" target="_blank" class="px-4 py-2 bg-red-500 text-white rounded-full text-sm font-medium hover:bg-red-600">
+                      🍎 Apple Music
+                    </a>
+                  ` : ""}
+                  ${artistSoundCloudUrl ? `
+                    <a href="${artistSoundCloudUrl}" target="_blank" class="px-4 py-2 bg-orange-500 text-white rounded-full text-sm font-medium hover:bg-orange-600">
+                      ☁️ SoundCloud
+                    </a>
+                  ` : ""}
+                </div>
+              </div>
+            </div>
+            
+            ${artistTracks.length > 0 ? `
+              <div class="space-y-3">
+                <h4 class="text-xl font-bold mb-4">Tracks</h4>
+                ${artistTracks.map((track: any, idx: number) => `
+                  <div class="flex items-center gap-4 p-4 bg-white rounded-lg shadow-sm hover:shadow-md transition">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-white font-bold" style="background-color: ${themeColor};">
+                      ${idx + 1}
+                    </div>
+                    ${track.coverArt ? `
+                      <img src="${track.coverArt}" alt="${track.title}" class="w-12 h-12 rounded object-cover" />
+                    ` : ""}
+                    <div class="flex-1">
+                      <div class="font-semibold">${track.title || 'Track'}</div>
+                      ${track.duration ? `<div class="text-sm text-gray-500">${track.duration}</div>` : ""}
+                    </div>
+                    <button class="p-2 rounded-full hover:bg-gray-100" onclick="alert('Play ${track.title}');">
+                      <svg class="w-6 h-6" style="color: ${themeColor};" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z"/>
+                      </svg>
+                    </button>
+                  </div>
+                `).join("")}
+              </div>
+            ` : ""}
+          </div>
+        </div>
+      `;
+    }
+
+    case "deals": {
+      const dealsTitle = content.title || "Special Offers";
+      const dealsItems = content.items || [];
+      const dealsLayout = content.layout || "grid";
+      
+      const themeColor = theme?.branding?.primaryColor || theme?.button?.backgroundColor || "#8b5cf6";
+      const themeColorDark = adjustColorBrightness(themeColor, -15);
+      
+      return `
+        <div class="deals-block w-full px-4 py-8">
+          <h3 class="text-3xl font-bold mb-8 text-center" style="color: ${themeColor};">${dealsTitle}</h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            ${dealsItems.map((deal: any) => `
+              <div class="relative bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow border-2" style="border-color: ${themeColor};">
+                ${deal.badge ? `
+                  <div class="absolute top-3 right-3 px-3 py-1 rounded-full text-white text-sm font-bold transform rotate-12" style="background-color: #ef4444;">
+                    ${deal.badge}
+                  </div>
+                ` : ""}
+                ${deal.image ? `
+                  <img src="${deal.image}" alt="${deal.title}" class="w-full h-40 object-cover" />
+                ` : ""}
+                <div class="p-5">
+                  <h4 class="text-xl font-bold mb-2" style="color: ${themeColor};">${deal.title || 'Deal'}</h4>
+                  ${deal.description ? `<p class="text-gray-600 mb-3 text-sm">${deal.description}</p>` : ""}
+                  ${deal.originalPrice && deal.salePrice ? `
+                    <div class="flex items-center gap-3 mb-3">
+                      <span class="text-2xl font-bold" style="color: ${themeColor};">${deal.salePrice}</span>
+                      <span class="text-lg text-gray-400 line-through">${deal.originalPrice}</span>
+                    </div>
+                  ` : deal.salePrice ? `
+                    <div class="text-2xl font-bold mb-3" style="color: ${themeColor};">${deal.salePrice}</div>
+                  ` : ""}
+                  ${deal.expiresAt ? `
+                    <div class="text-sm text-gray-500 mb-3">
+                      ⏰ Expires: ${new Date(deal.expiresAt).toLocaleDateString()}
+                    </div>
+                  ` : ""}
+                  ${deal.code ? `
+                    <div class="mb-3 p-2 bg-gray-50 rounded border border-dashed" style="border-color: ${themeColor};">
+                      <div class="text-xs text-gray-600 mb-1">Coupon Code:</div>
+                      <div class="font-mono font-bold text-center" style="color: ${themeColor};">${deal.code}</div>
+                    </div>
+                  ` : ""}
+                  <button 
+                    class="w-full py-3 rounded-lg text-white font-semibold transition-colors"
+                    style="background-color: ${themeColor};"
+                    onmouseover="this.style.backgroundColor='${themeColorDark}'"
+                    onmouseout="this.style.backgroundColor='${themeColor}'"
+                    onclick="alert('${deal.code ? `Use code: ${deal.code}` : 'Claim this deal!'}');"
+                  >
+                    ${deal.buttonText || 'Claim Deal'}
+                  </button>
+                </div>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    case "real-estate": {
+      const realEstateTitle = content.title || "Featured Properties";
+      const properties = content.properties || [];
+      const showFilters = content.showFilters !== false;
+      
+      const themeColor = theme?.branding?.primaryColor || theme?.button?.backgroundColor || "#8b5cf6";
+      
+      return `
+        <div class="real-estate-block w-full px-4 py-8">
+          <h3 class="text-3xl font-bold mb-8 text-center" style="color: ${themeColor};">${realEstateTitle}</h3>
+          
+          ${showFilters ? `
+            <div class="flex flex-wrap gap-3 mb-6 justify-center">
+              <select class="px-4 py-2 border rounded-lg" style="border-color: ${themeColor}33;">
+                <option>All Types</option>
+                <option>House</option>
+                <option>Apartment</option>
+                <option>Condo</option>
+              </select>
+              <select class="px-4 py-2 border rounded-lg" style="border-color: ${themeColor}33;">
+                <option>All Prices</option>
+                <option>Under $500k</option>
+                <option>$500k - $1M</option>
+                <option>Over $1M</option>
+              </select>
+              <select class="px-4 py-2 border rounded-lg" style="border-color: ${themeColor}33;">
+                <option>Any Beds</option>
+                <option>1+</option>
+                <option>2+</option>
+                <option>3+</option>
+                <option>4+</option>
+              </select>
+            </div>
+          ` : ""}
+          
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            ${properties.map((property: any) => `
+              <div class="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+                ${property.image ? `
+                  <div class="relative">
+                    <img src="${property.image}" alt="${property.title}" class="w-full h-48 object-cover" />
+                    ${property.status ? `
+                      <div class="absolute top-3 left-3 px-3 py-1 rounded-full text-white text-sm font-bold" style="background-color: ${themeColor};">
+                        ${property.status}
+                      </div>
+                    ` : ""}
+                  </div>
+                ` : ""}
+                <div class="p-5">
+                  <div class="text-2xl font-bold mb-2" style="color: ${themeColor};">${property.price || '$0'}</div>
+                  <h4 class="font-semibold text-lg mb-2">${property.title || 'Property'}</h4>
+                  ${property.address ? `
+                    <div class="text-sm text-gray-600 mb-3 flex items-center gap-1">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      </svg>
+                      ${property.address}
+                    </div>
+                  ` : ""}
+                  <div class="flex gap-4 text-sm text-gray-600 mb-4">
+                    ${property.beds ? `<span>🛏️ ${property.beds} beds</span>` : ""}
+                    ${property.baths ? `<span>🛁 ${property.baths} baths</span>` : ""}
+                    ${property.sqft ? `<span>📐 ${property.sqft} sqft</span>` : ""}
+                  </div>
+                  <button 
+                    class="w-full py-2 rounded-lg text-white font-semibold"
+                    style="background-color: ${themeColor};"
+                    onclick="alert('Schedule a viewing for ${property.title}');"
+                  >
+                    Schedule Viewing
+                  </button>
+                </div>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    case "menu": {
+      const menuTitle = content.title || "Our Menu";
+      const menuCategories = content.categories || [];
+      const menuLayout = content.layout || "sections";
+      
+      const themeColor = theme?.branding?.primaryColor || theme?.button?.backgroundColor || "#8b5cf6";
+      
+      return `
+        <div class="menu-block w-full px-4 py-8">
+          <h3 class="text-3xl font-bold mb-8 text-center" style="color: ${themeColor};">${menuTitle}</h3>
+          
+          <div class="max-w-4xl mx-auto space-y-8">
+            ${menuCategories.map((category: any) => `
+              <div>
+                <h4 class="text-2xl font-bold mb-4 pb-2 border-b-2" style="color: ${themeColor}; border-color: ${themeColor};">
+                  ${category.name || 'Category'}
+                </h4>
+                <div class="space-y-4">
+                  ${(category.items || []).map((item: any) => `
+                    <div class="flex justify-between items-start gap-4">
+                      <div class="flex-1">
+                        <div class="flex items-center gap-2 mb-1">
+                          <h5 class="font-semibold text-lg">${item.name || 'Item'}</h5>
+                          ${item.dietary ? `
+                            <span class="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                              ${item.dietary}
+                            </span>
+                          ` : ""}
+                          ${item.spicy ? `<span class="text-red-500">🌶️</span>` : ""}
+                        </div>
+                        ${item.description ? `
+                          <p class="text-sm text-gray-600">${item.description}</p>
+                        ` : ""}
+                      </div>
+                      <div class="font-bold whitespace-nowrap" style="color: ${themeColor};">
+                        ${item.price || '$0'}
+                      </div>
+                    </div>
+                  `).join("")}
+                </div>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      `;
+    }
       
     default:
       return `<!-- Unknown block type: ${block.type} -->`;
