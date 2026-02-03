@@ -35,8 +35,13 @@ async function start() {
       contentSecurityPolicy: false, // Disable for API
     });
 
+    // JWT_SECRET is required - fail fast if not set
+    if (!process.env.JWT_SECRET) {
+      throw new Error('FATAL: JWT_SECRET environment variable is not set');
+    }
+
     await server.register(jwt, {
-      secret: process.env.JWT_SECRET || 'supersecretkey-change-in-production',
+      secret: process.env.JWT_SECRET,
     });
 
     // Health check

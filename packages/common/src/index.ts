@@ -7,6 +7,10 @@ import { logger } from "./logger";
 import { httpRequestDurationMicroseconds, register } from "./metrics";
 import { getRedisClient } from "./cache";
 
+// Export observability utilities
+export * from './mixpanel';
+export * from './sentry';
+
 
 dotenv.config();
 

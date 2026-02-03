@@ -11,6 +11,7 @@ import type { Producer } from "kafkajs"; // KafkaJS producer type
 import qrRoutes from "./routes/qr.js"; // route module that mounts QR endpoints
 import fastifySwagger from "@fastify/swagger";
 import fastifySwaggerUi from "@fastify/swagger-ui";
+import { initializeRedis, closeRedis } from "./lib/cache.js"; // Redis cache layer
 
 
 console.log("starting qr-service...");
@@ -80,18 +81,21 @@ let producer: Producer | null = null;
 
 // Only start the server if this file is being run directly (not imported for testing)
 if (import.meta.url === `file://${process.argv[1]}`) {
-  // Start the HTTP server
-  const app = await buildApp();
-  
-  app
-    .listen({ port, host: '0.0.0.0' })
-    .then(() => logger.info(`QR service running on :${port} <- QR service`))
-    .catch((err) => {
-      // Print the full error to stderr so we always get the stack trace
-      console.error("Failed to start server", err && err.stack ? err.stack : err);
-      logger.error("Failed to start server", err);
-      process.exit(1);
-    });
+  // Wrap in async IIFE to avoid top-level await
+  (async () => {
+    // Start the HTTP server
+    const app = await buildApp();
+    
+    app
+      .listen({ port, host: '0.0.0.0' })
+      .then(() => logger.info(`QR service running on :${port} <- QR service`))
+      .catch((err) => {
+        // Print the full error to stderr so we always get the stack trace
+        console.error("Failed to start server", err && err.stack ? err.stack : err);
+        logger.error("Failed to start server", err);
+        process.exit(1);
+      });
+  })();
 
 /**
  * Initialize Kafka producer and emit a sample qr.scanned event.
@@ -137,7 +141,15 @@ async function initMQ() {
 // Kick off producer initialization in the background on startup
 initMQ();
 
-// Graceful shutdown: close HTTP server, then Kafka producer
+// Initialize Redis on startup
+try {
+  initializeRedis();
+  logger.info("✅ Redis cache initialized");
+} catch (err) {
+  logger.error({ err }, "❌ Failed to initialize Redis - continuing without cache");
+}
+
+// Graceful shutdown: close HTTP server, then Kafka producer, then Redis
 async function gracefulShutdown(signal: string) {
   logger.info({ signal }, "Received shutdown signal, starting graceful shutdown");
   
@@ -152,6 +164,10 @@ async function gracefulShutdown(signal: string) {
       await producer.disconnect();
       logger.info("Kafka producer disconnected");
     }
+    
+    // 3) Close Redis connection
+    await closeRedis();
+    logger.info("Redis connection closed");
     
     logger.info("Graceful shutdown complete");
     process.exit(0);

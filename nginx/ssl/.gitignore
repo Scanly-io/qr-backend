@@ -1,0 +1,10 @@
+# Do not commit SSL certificates to version control
+*.pem
+*.key
+*.crt
+*.csr
+*.p12
+*.pfx
+
+# Allow the script
+!generate-ssl-certs.sh

@@ -9,10 +9,10 @@ This roadmap outlines phases, milestones, timelines, and exit criteria to take t
 Timeline: Completed
 
 Milestones:
-- ✅ End-to-end pipeline: QR → Kafka → Analytics → DB
-- ✅ Prometheus + Grafana up; metrics exported
-- ✅ Event schema validation in place
-- ✅ Fixes documented in `FIXES.md` and architecture in `README.md`
+- End-to-end pipeline: QR → Kafka → Analytics → DB
+- Prometheus + Grafana up; metrics exported
+- Event schema validation in place
+- Fixes documented in `FIXES.md` and architecture in `README.md`
 
 Exit criteria:
 - Events reliably flowing; metrics accessible; no critical runtime errors.

@@ -315,6 +315,84 @@ flowchart TB
 - **Hot metrics sync** - Redis stores real-time counters (page views, scan counts), Background Processors flush to PostgreSQL every 60 seconds
 - **QR ↔ Microsite integration** - When a QR code is scanned, QR Service queries Microsite Service to fetch the linked microsite page
 
+**Background Jobs (⚡ Kafka Consumers) - What They Do:**
+
+Background jobs are Node.js workers that consume events from Kafka and process them asynchronously. This architecture decouples slow operations from user-facing requests for faster response times.
+
+**Why Separate Jobs?**
+- **Fast User Response**: QR scan returns redirect in <100ms, analytics processing happens later
+- **Batch Efficiency**: Process 1000 events together instead of 1000 individual database writes
+- **Scalability**: Add more consumers during high traffic without affecting web services
+- **Resilience**: Failed jobs retry automatically, user requests never fail due to analytics issues
+
+**Specific Background Jobs Running:**
+
+1. **Scan Event Processor**
+   - Consumes: `qr.scanned` events from Kafka
+   - Processes: Device fingerprinting, location enrichment, user agent parsing
+   - Writes: Analytics DB with full scan metadata (device type, browser, OS, country, city)
+   - Frequency: Real-time (processes events as they arrive)
+
+2. **Metrics Aggregator**
+   - Consumes: `analytics.metric_updated` events
+   - Processes: Calculates daily/weekly/monthly aggregates (total scans, unique visitors, top locations)
+   - Writes: Pre-computed dashboard metrics to Analytics DB
+   - Frequency: Every 5 minutes (batch processing)
+
+3. **Hot Metrics Sync**
+   - Consumes: Timer-based (not Kafka, runs on schedule)
+   - Processes: Reads Redis counters (`INCR scan_count:qr_abc123`), batches 1000s of writes
+   - Writes: Flushes to Analytics PostgreSQL for persistence
+   - Frequency: Every 60 seconds
+   - Why: Reduces database writes by 99% (1000 Redis writes → 1 PostgreSQL batch)
+
+4. **A/B Test Results Processor**
+   - Consumes: `experiment.conversion` events
+   - Processes: Calculates conversion rates, statistical significance, winning variants
+   - Writes: Experiment results to Analytics DB
+   - Frequency: Real-time for conversions, aggregates every 10 minutes
+
+5. **Notification Dispatcher**
+   - Consumes: `analytics.threshold_exceeded` events (e.g., QR scan limit reached)
+   - Processes: Sends email/SMS notifications to users
+   - External Calls: SendGrid (email), Twilio (SMS)
+   - Frequency: Real-time (immediate notifications)
+
+**Example Flow - QR Scan with Background Processing:**
+
+```
+1. User scans QR code
+   → QR Service receives request (10ms)
+   → Check cache for QR metadata (5ms)
+   → Return redirect URL to user (total: 50ms) ✅ FAST
+
+2. QR Service publishes event to Kafka (non-blocking, 2ms)
+   → Event: { qr_id: "abc123", user_ip: "1.2.3.4", timestamp: "2026-02-03T10:30:00Z" }
+
+3. Background Job picks up event (happens in parallel, user already redirected)
+   → Scan Event Processor consumes from Kafka
+   → Enriches with geo-location (IP → San Francisco, CA)
+   → Parses user agent (Chrome 120 on iPhone 15 Pro)
+   → Writes full record to Analytics DB (100ms, but user doesn't wait)
+
+4. Metrics Aggregator processes batch every 5 minutes
+   → Reads 5000 scan events from last 5 minutes
+   → Calculates: Total scans today, unique visitors, top countries
+   → Updates dashboard metrics in 1 batch write
+
+5. Hot Metrics Sync (every 60 seconds)
+   → Redis has: scan_count:qr_abc123 = 1247 (from 1000s of INCR commands)
+   → Background job reads all counters, writes to PostgreSQL
+   → Redis stays hot, PostgreSQL has persistent backup
+```
+
+**Technology Stack for Background Jobs:**
+- **Runtime**: Node.js 20+ (same as web services for code sharing)
+- **Kafka Library**: `kafkajs` (consumer groups for parallel processing)
+- **Deployment**: Docker containers (separate from web services)
+- **Scaling**: Horizontal - add more consumers to process faster
+- **Monitoring**: Datadog tracks consumer lag, processing time, error rates
+
 **Key Architecture Decisions:**
 
 - **Gateway-centric:** Single entry point for observability and security

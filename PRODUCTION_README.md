@@ -12,18 +12,18 @@ The core event pipeline (QR Service → Redpanda → Analytics Service → Postg
 ## 2. Current Capability Matrix
 | Area | Status | Notes |
 |------|--------|-------|
-| Core Event Flow | ✅ Functional | Events move end-to-end successfully |
-| Validation | ✅ Schema (Zod) | Strict literal validation for `qr.scanned` |
-| Metrics | ✅ Basic | HTTP latency histogram + default metrics |
-| Logging | ✅ Structured | Pino pretty in dev; needs JSON in prod |
-| Storage | ✅ Single table | Lacks migrations history & versioning |
-| Deployment | ⚠️ Dev scripts | `npm run dev`; no prod entrypoint or container images |
-| Resiliency | ❌ Limited | No DLQ processor, no retries/backoff, no idempotency |
-| Security | ❌ Minimal | No auth, default Grafana creds, plaintext env vars |
-| Observability | ⚠️ Partial | Metrics only, no dashboards/alerts/traces |
-| Scalability | ❌ Single broker/partition | Topic: 1 partition, replication factor 1 |
-| Data Management | ❌ No backups | No retention, archiving, compliance strategy |
-| CI/CD | ❌ Absent | No automated lint/test/build/publish pipeline |
+| Core Event Flow | Functional | Events move end-to-end successfully |
+| Validation | Schema (Zod) | Strict literal validation for `qr.scanned` |
+| Metrics | Basic | HTTP latency histogram + default metrics |
+| Logging | Structured | Pino pretty in dev; needs JSON in prod |
+| Storage | Single table | Lacks migrations history & versioning |
+| Deployment | Dev scripts | `npm run dev`; no prod entrypoint or container images |
+| Resiliency | Limited | No DLQ processor, no retries/backoff, no idempotency |
+| Security | Minimal | No auth, default Grafana creds, plaintext env vars |
+| Observability | Partial | Metrics only, no dashboards/alerts/traces |
+| Scalability | Single broker/partition | Topic: 1 partition, replication factor 1 |
+| Data Management | No backups | No retention, archiving, compliance strategy |
+| CI/CD | Absent | No automated lint/test/build/publish pipeline |
 
 Legend: ✅ Ready | ⚠️ Partial | ❌ Missing
 

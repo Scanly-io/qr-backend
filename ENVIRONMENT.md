@@ -190,6 +190,7 @@ JWT_SECRET=devsecret
 KAFKA_DISABLED=1
 REDIS_URL=redis://localhost:6379
 ```
+
 Everything else is optional. Start small, layer features as you understand them.
 
 
