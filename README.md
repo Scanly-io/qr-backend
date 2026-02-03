@@ -299,6 +299,7 @@ flowchart TB
 - **Redis is duplicated for clarity** - Rate limiting (Gateway) vs application caching (QR/Analytics)
 - **R2 Storage is duplicated** - QR images vs Microsite media (separate buckets)
 - **Kafka enables loose coupling** - Services publish events without knowing who consumes them
+- **Hot metrics sync** - Redis stores real-time counters (page views, scan counts), Background Processors flush to PostgreSQL every 60 seconds
 
 **Key Architecture Decisions:**
 
@@ -307,6 +308,7 @@ flowchart TB
 - **Event-driven:** Kafka decouples request processing from background jobs
 - **Service isolation:** Each service can scale independently
 - **Storage separation:** R2 handles static assets (QR codes, images, media)
+- **Write-through caching:** High-frequency metrics stay in Redis, batch written to PostgreSQL for persistence
 
 ---
 
