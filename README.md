@@ -251,7 +251,7 @@ flowchart TB
     subgraph microsite[" MICROSITE SERVICE "]
         MicrositeService[Page Builder<br/>Theme Rendering]
         MicrositeDB[(PostgreSQL<br/>Pages/Blocks)]
-        MicrositeStorage[R2 Storage<br/>Media Files)]
+        MicrositeStorage[R2 Storage<br/>Media Files]
     end
     
     subgraph events[" EVENT PROCESSING "]
