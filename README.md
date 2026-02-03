@@ -217,65 +217,98 @@ User → Cloudflare CDN → Nginx → Tenant Gateway → Microservices → Data 
 
 ### Architecture Diagram
 
-**Simple Request Flow:** This shows how a user request flows through the system and back.
+**System Overview:** This shows clear service boundaries and how each service manages its own data.
 
 ```mermaid
 flowchart TB
     User[User]
     CDN[Cloudflare CDN]
-    Nginx[Nginx]
-    Gateway[API Gateway]
-    RateLimitRedis[(Redis<br/>Rate Limiting)]
-    Auth[Auth Service]
-    QR[QR Service]
-    Analytics[Analytics Service]
-    Microsite[Microsite Service]
-    CacheRedis[(Redis<br/>Cache)]
-    Postgres[(PostgreSQL<br/>Database)]
-    KafkaQueue[Kafka<br/>Event Queue]
-    EventConsumers[Background Processors<br/>Analytics/ML/Email]
     
-    User <-->|HTTPS Request/Response| CDN
+    subgraph edge[" EDGE LAYER "]
+        Nginx[Nginx Reverse Proxy]
+        Gateway[API Gateway<br/>Rate Limiting + Auth]
+        RateLimitRedis[(Redis<br/>Rate Limits)]
+    end
+    
+    subgraph auth[" AUTH SERVICE "]
+        AuthService[Auth Logic<br/>JWT + Sessions]
+        AuthDB[(PostgreSQL<br/>Users/Tokens)]
+    end
+    
+    subgraph qr[" QR SERVICE "]
+        QRService[QR Generation<br/>Scan Tracking]
+        QRCache[(Redis<br/>QR Metadata)]
+        QRDB[(PostgreSQL<br/>QR Codes)]
+        QRStorage[R2 Storage<br/>QR Images]
+    end
+    
+    subgraph analytics[" ANALYTICS SERVICE "]
+        AnalyticsService[Analytics Engine<br/>Metrics Processing]
+        AnalyticsCache[(Redis<br/>Hot Metrics)]
+        AnalyticsDB[(PostgreSQL<br/>Scan Events)]
+    end
+    
+    subgraph microsite[" MICROSITE SERVICE "]
+        MicrositeService[Page Builder<br/>Theme Rendering]
+        MicrositeDB[(PostgreSQL<br/>Pages/Blocks)]
+        MicrositeStorage[R2 Storage<br/>Media Files)]
+    end
+    
+    subgraph events[" EVENT PROCESSING "]
+        Kafka[Kafka Event Queue<br/>qr.created | scan.tracked]
+        Consumers[Background Processors<br/>Analytics/ML/Email]
+    end
+    
+    User <-->|HTTPS| CDN
     CDN <--> Nginx
     Nginx <--> Gateway
+    Gateway <-->|Check Limits| RateLimitRedis
     
-    Gateway <-->|Check Rate Limit| RateLimitRedis
-    Gateway <-->|Authenticate| Auth
+    Gateway <-->|Authenticate| AuthService
+    AuthService <--> AuthDB
     
-    Gateway <--> QR
-    Gateway <--> Analytics
-    Gateway <--> Microsite
+    Gateway <-->|Create/Read QR| QRService
+    QRService <--> QRCache
+    QRService <--> QRDB
+    QRService -->|Upload| QRStorage
     
-    QR <--> CacheRedis
-    QR <--> Postgres
+    Gateway <-->|Track/Query| AnalyticsService
+    AnalyticsService <--> AnalyticsCache
+    AnalyticsService <--> AnalyticsDB
     
-    Analytics <--> CacheRedis
-    Analytics <--> Postgres
+    Gateway <-->|Build/Render| MicrositeService
+    MicrositeService <--> MicrositeDB
+    MicrositeService -->|Upload| MicrositeStorage
     
-    Microsite <--> Postgres
-    
-    QR -->|Publish Events| KafkaQueue
-    Analytics -->|Publish Events| KafkaQueue
-    
-    KafkaQueue -->|Consume Events| EventConsumers
-    EventConsumers --> Postgres
+    QRService -->|qr.created| Kafka
+    AnalyticsService -->|scan.tracked| Kafka
+    Kafka -->|Consume| Consumers
+    Consumers --> AnalyticsDB
 ```
 
 **What this shows:**
-1. **User requests** come through Cloudflare CDN for security and speed
-2. **Nginx** routes traffic to the API Gateway
-3. **Gateway** handles rate limiting (via Rate Limit Redis) and authentication (via Auth Service)
-4. **Core Services** (QR, Analytics, Microsite) process business logic
-5. **Data Layer** stores data in PostgreSQL and caches in Cache Redis
-6. **Event Queue** (Kafka) receives events from services asynchronously
-7. **Background Processors** consume events for analytics, ML, and email tasks
+
+1. **Edge Layer** - Gateway handles all traffic, rate limiting, and authentication
+2. **Auth Service** - User management with dedicated PostgreSQL database
+3. **QR Service** - QR code generation with Redis cache, PostgreSQL storage, and R2 for images
+4. **Analytics Service** - Scan tracking with Redis for hot metrics and PostgreSQL for historical data
+5. **Microsite Service** - Page builder with PostgreSQL for content and R2 for media files
+6. **Event Processing** - Kafka queue decouples services for async processing
+
+**Service Boundaries Explained:**
+
+- **Each service owns its data** - No shared databases (except in MVP where all PostgreSQL instances are in one DB)
+- **Redis is duplicated for clarity** - Rate limiting (Gateway) vs application caching (QR/Analytics)
+- **R2 Storage is duplicated** - QR images vs Microsite media (separate buckets)
+- **Kafka enables loose coupling** - Services publish events without knowing who consumes them
 
 **Key Architecture Decisions:**
-- **Separation of concerns:** Rate limiting Redis separate from cache Redis (clear purpose)
+
 - **Gateway-centric:** Single entry point for observability and security
 - **Cache-first:** Redis checks before database (100x performance improvement)
 - **Event-driven:** Kafka decouples request processing from background jobs
-- **Async processing:** Background processors handle analytics/ML without blocking user requests
+- **Service isolation:** Each service can scale independently
+- **Storage separation:** R2 handles static assets (QR codes, images, media)
 
 ---
 
