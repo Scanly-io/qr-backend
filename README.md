@@ -231,8 +231,9 @@ flowchart TB
     Analytics[Analytics Service]
     Microsite[Microsite Service]
     CacheRedis[(Redis<br/>Cache)]
-    Postgres[(PostgreSQL)]
-    Kafka[Kafka Events]
+    Postgres[(PostgreSQL<br/>Database)]
+    KafkaQueue[Kafka<br/>Event Queue]
+    EventConsumers[Background Processors<br/>Analytics/ML/Email]
     
     User -->|HTTPS| CDN
     CDN --> Nginx
@@ -253,22 +254,28 @@ flowchart TB
     
     Microsite --> Postgres
     
-    QR -->|Publish Events| Kafka
-    Analytics -->|Publish Events| Kafka
+    QR -->|Publish Events| KafkaQueue
+    Analytics -->|Publish Events| KafkaQueue
+    
+    KafkaQueue -->|Consume Events| EventConsumers
+    EventConsumers --> Postgres
 ```
 
 **What this shows:**
 1. **User requests** come through Cloudflare CDN for security and speed
 2. **Nginx** routes traffic to the API Gateway
-3. **Gateway** handles authentication (via Auth Service) and rate limiting (via Redis)
+3. **Gateway** handles rate limiting (via Rate Limit Redis) and authentication (via Auth Service)
 4. **Core Services** (QR, Analytics, Microsite) process business logic
-5. **Data Layer** stores data in PostgreSQL and caches in Redis
-6. **Event Bus** (Kafka) handles asynchronous background tasks
+5. **Data Layer** stores data in PostgreSQL and caches in Cache Redis
+6. **Event Queue** (Kafka) receives events from services asynchronously
+7. **Background Processors** consume events for analytics, ML, and email tasks
 
 **Key Architecture Decisions:**
+- **Separation of concerns:** Rate limiting Redis separate from cache Redis (clear purpose)
 - **Gateway-centric:** Single entry point for observability and security
 - **Cache-first:** Redis checks before database (100x performance improvement)
-- **Event-driven:** Kafka enables loose coupling between services
+- **Event-driven:** Kafka decouples request processing from background jobs
+- **Async processing:** Background processors handle analytics/ML without blocking user requests
 
 ---
 
