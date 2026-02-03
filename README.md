@@ -254,10 +254,8 @@ flowchart TB
         MicrositeStorage[R2 Storage<br/>Media Files]
     end
     
-    subgraph events[" EVENT PROCESSING "]
-        Kafka[Kafka Event Queue<br/>qr.created, scan.tracked]
-        Consumers[Background Processors<br/>Analytics/ML/Email]
-    end
+    Kafka[Kafka Event Queue<br/>qr.created, scan.tracked]
+    Consumers[Background Processors<br/>Analytics/ML/Email]
     
     User <--> CDN
     CDN <--> Nginx
@@ -271,17 +269,17 @@ flowchart TB
     QRService <--> QRCache
     QRService <--> QRDB
     QRService <--> QRStorage
+    QRService --> Kafka
     
     Gateway <--> AnalyticsService
     AnalyticsService <--> AnalyticsCache
     AnalyticsService <--> AnalyticsDB
+    AnalyticsService --> Kafka
     
     Gateway <--> MicrositeService
     MicrositeService <--> MicrositeDB
     MicrositeService <--> MicrositeStorage
     
-    QRService --> Kafka
-    AnalyticsService --> Kafka
     Kafka --> Consumers
     Consumers --> AnalyticsDB
 ```
