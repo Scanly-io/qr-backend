@@ -225,31 +225,33 @@ flowchart TB
     CDN[Cloudflare CDN]
     Nginx[Nginx]
     Gateway[API Gateway]
+    RateLimitRedis[(Redis<br/>Rate Limiting)]
     Auth[Auth Service]
     QR[QR Service]
     Analytics[Analytics Service]
     Microsite[Microsite Service]
+    CacheRedis[(Redis<br/>Cache)]
     Postgres[(PostgreSQL)]
-    Redis[(Redis Cache)]
     Kafka[Kafka Events]
     
     User -->|HTTPS| CDN
     CDN --> Nginx
     Nginx --> Gateway
     
+    Gateway -->|Check Rate Limit| RateLimitRedis
     Gateway -->|Authenticate| Auth
-    Gateway -->|Rate Limit| Redis
     
     Gateway --> QR
     Gateway --> Analytics
     Gateway --> Microsite
     
+    QR --> CacheRedis
     QR --> Postgres
-    Analytics --> Postgres
-    Microsite --> Postgres
     
-    QR --> Redis
-    Analytics --> Redis
+    Analytics --> CacheRedis
+    Analytics --> Postgres
+    
+    Microsite --> Postgres
     
     QR -->|Publish Events| Kafka
     Analytics -->|Publish Events| Kafka
