@@ -224,74 +224,74 @@ User → Cloudflare CDN → Nginx → Tenant Gateway → Microservices → Data 
 ```mermaid
 graph TB
     %% Users (People)
-    Owner[👤 Business Owner<br/><small>Manages QR codes<br/>and microsites</small>]
-    Customer[🛍️ End Customer<br/><small>Scans QR codes<br/>in physical locations</small>]
-    Creator[🎨 Content Creator<br/><small>Builds link-in-bio<br/>pages</small>]
-    Agency[🏢 Marketing Agency<br/><small>Manages multiple<br/>client campaigns</small>]
+    Owner["Business Owner<br/>[Person]"]
+    Customer["End Customer<br/>[Person]"]
+    Creator["Content Creator<br/>[Person]"]
+    Agency["Marketing Agency<br/>[Person]"]
 
     %% The System (Central)
-    System[⚡ QR & Microsite SaaS Platform<br/><small>Generate QR codes, build microsites,<br/>track analytics in real-time</small>]
+    System["QR & Microsite Platform<br/>[Software System]<br/><br/>Generates QR codes, builds microsites,<br/>tracks real-time analytics"]
 
     %% External Systems
-    OpenAI[🤖 OpenAI API<br/><small>GPT-4 for AI content<br/>generation</small>]
-    Cloudflare[☁️ Cloudflare CDN<br/><small>Global edge caching<br/>and DDoS protection</small>]
-    SendGrid[📧 SendGrid<br/><small>Transactional email<br/>delivery</small>]
-    Twilio[📱 Twilio<br/><small>SMS notifications<br/>and alerts</small>]
-    Stripe[💳 Stripe<br/><small>Payment processing<br/>and subscriptions</small>]
-    Mixpanel[📊 Mixpanel<br/><small>Product analytics<br/>and user tracking</small>]
-    Sentry[🐛 Sentry<br/><small>Error tracking<br/>and monitoring</small>]
+    OpenAI["OpenAI API<br/>[External System]<br/><br/>AI content generation"]
+    Cloudflare["Cloudflare CDN<br/>[External System]<br/><br/>Edge caching & DDoS protection"]
+    SendGrid["SendGrid<br/>[External System]<br/><br/>Email delivery"]
+    Twilio["Twilio<br/>[External System]<br/><br/>SMS notifications"]
+    Stripe["Stripe<br/>[External System]<br/><br/>Payment processing"]
+    Mixpanel["Mixpanel<br/>[External System]<br/><br/>Product analytics"]
+    Sentry["Sentry<br/>[External System]<br/><br/>Error monitoring"]
 
     %% User → System interactions
-    Owner -->|Creates QR codes<br/>Builds microsites<br/>Views analytics<br/><small>HTTPS</small>| System
-    Creator -->|Creates link-in-bio pages<br/>Customizes branding<br/><small>HTTPS</small>| System
-    Agency -->|Manages client campaigns<br/>Bulk QR generation<br/><small>HTTPS</small>| System
-    Customer -->|Scans QR codes<br/>Views microsites<br/><small>HTTPS</small>| System
+    Owner -->|"Uses [HTTPS]"| System
+    Creator -->|"Uses [HTTPS]"| System
+    Agency -->|"Uses [HTTPS]"| System
+    Customer -->|"Scans QR codes [HTTPS]"| System
 
     %% System → External Systems interactions
-    System -->|Generates AI content<br/>Smart descriptions<br/><small>REST API</small>| OpenAI
-    System -->|Serves QR images<br/>Delivers microsites<br/><small>CDN Edge</small>| Cloudflare
-    System -->|Sends welcome emails<br/>Scan notifications<br/><small>REST API</small>| SendGrid
-    System -->|Sends SMS alerts<br/>Limit exceeded warnings<br/><small>REST API</small>| Twilio
-    System -->|Processes payments<br/>Manages subscriptions<br/><small>REST API</small>| Stripe
-    System -->|Tracks user events<br/>Funnel analysis<br/><small>REST API</small>| Mixpanel
-    System -->|Reports errors<br/>Performance issues<br/><small>REST API</small>| Sentry
+    System -->|"Generates content [REST]"| OpenAI
+    System -->|"Delivers assets [CDN]"| Cloudflare
+    System -->|"Sends emails [REST]"| SendGrid
+    System -->|"Sends SMS [REST]"| Twilio
+    System -->|"Processes payments [REST]"| Stripe
+    System -->|"Tracks events [REST]"| Mixpanel
+    System -->|"Reports errors [REST]"| Sentry
 
-    %% Styling
-    classDef userStyle fill:#60a5fa,stroke:#1e40af,stroke-width:2px,color:#fff
-    classDef systemStyle fill:#10b981,stroke:#059669,stroke-width:3px,color:#fff
-    classDef externalStyle fill:#f59e0b,stroke:#d97706,stroke-width:2px,color:#fff
+    %% Styling (C4 Model standard colors)
+    classDef personStyle fill:#08427b,stroke:#052e56,stroke-width:2px,color:#ffffff
+    classDef systemStyle fill:#1168bd,stroke:#0b4884,stroke-width:4px,color:#ffffff
+    classDef externalStyle fill:#999999,stroke:#6b6b6b,stroke-width:2px,color:#ffffff
 
-    class Owner,Customer,Creator,Agency userStyle
+    class Owner,Customer,Creator,Agency personStyle
     class System systemStyle
     class OpenAI,Cloudflare,SendGrid,Twilio,Stripe,Mixpanel,Sentry externalStyle
 ```
 
 **What This System Context Shows:**
 
-**1. People Using The System (4 User Types)**
-- **👤 Business Owner** - Small shop owner (like mom's store) managing QR codes for physical products
-- **🛍️ End Customer** - Scans QR codes in shops, restaurants, events to view microsites
-- **🎨 Content Creator** - Influencers building link-in-bio pages for Instagram/TikTok
-- **🏢 Marketing Agency** - B2B clients managing campaigns for multiple businesses
+**1. People Using The System (4 Personas)**
+- **Business Owner** - Manages QR codes for physical products (retail shops, restaurants)
+- **End Customer** - Scans QR codes in physical locations to access microsites
+- **Content Creator** - Builds link-in-bio pages for social media (Instagram, TikTok)
+- **Marketing Agency** - Manages QR campaigns for multiple clients (B2B use case)
 
-**2. The System (Black Box)**
-- **⚡ QR & Microsite SaaS Platform** - Your entire 19-service architecture appears as ONE system
-- Users don't care about internal services (Gateway, Auth, QR, Analytics, etc.)
-- Focus is on **what it does**, not **how it does it**
+**2. The Software System (Black Box)**
+- **QR & Microsite Platform** - The entire 19-service architecture appears as ONE system
+- Users interact with the business capabilities, not the technical implementation
+- Focus: **What value it provides**, not **how it's built internally**
 
-**3. External Systems (7 Dependencies)**
-- **🤖 OpenAI API** - AI-powered content generation (Phase 2)
-- **☁️ Cloudflare CDN** - Global performance and security
-- **📧 SendGrid** - Email notifications (welcome, scan alerts)
-- **📱 Twilio** - SMS alerts (scan limits, important notifications)
-- **💳 Stripe** - Payment processing and subscription billing
-- **📊 Mixpanel** - Product analytics and user behavior tracking
-- **🐛 Sentry** - Error monitoring and performance tracking
+**3. External Systems (7 Integrations)**
+- **OpenAI API** - AI-powered content generation (deferred to Phase 2)
+- **Cloudflare CDN** - Global edge caching and DDoS protection
+- **SendGrid** - Transactional email delivery (welcome, notifications)
+- **Twilio** - SMS alerts for limit exceeded, important events
+- **Stripe** - Payment processing and subscription management
+- **Mixpanel** - Product analytics and user behavior tracking
+- **Sentry** - Application error monitoring and performance tracking
 
-**4. Interactions (What Flows Between Them)**
-- **User → System**: HTTPS requests (web browser, mobile)
-- **System → External APIs**: REST API calls (JSON over HTTPS)
-- **System → CDN**: Edge caching for static assets
+**4. Relationships (Communication Protocols)**
+- **Person → System**: HTTPS (web browsers, mobile apps)
+- **System → External Systems**: REST API (JSON over HTTPS), CDN edge delivery
+- **Interactions are simplified** - Details shown in Level 2 Container Diagram below
 
 **Why This Matters for TPM Interviews:**
 
