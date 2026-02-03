@@ -223,9 +223,9 @@ User → Cloudflare CDN → Nginx → Tenant Gateway → Microservices → Data 
 flowchart TB
     User[User]
     CDN[Cloudflare CDN]
+    Nginx[Nginx Reverse Proxy]
     
-    subgraph edge[" EDGE LAYER "]
-        Nginx[Nginx Reverse Proxy]
+    subgraph gateway[" GATEWAY "]
         Gateway[API Gateway<br/>Rate Limiting + Auth]
         RateLimitRedis[(Redis<br/>Rate Limits)]
     end
@@ -259,30 +259,30 @@ flowchart TB
         Consumers[Background Processors<br/>Analytics/ML/Email]
     end
     
-    User <-->|HTTPS| CDN
+    User <--> CDN
     CDN <--> Nginx
     Nginx <--> Gateway
-    Gateway <-->|Check Limits| RateLimitRedis
+    Gateway <--> RateLimitRedis
     
-    Gateway <-->|Authenticate| AuthService
+    Gateway <--> AuthService
     AuthService <--> AuthDB
     
-    Gateway <-->|Create/Read QR| QRService
+    Gateway <--> QRService
     QRService <--> QRCache
     QRService <--> QRDB
-    QRService -->|Upload| QRStorage
+    QRService <--> QRStorage
     
-    Gateway <-->|Track/Query| AnalyticsService
+    Gateway <--> AnalyticsService
     AnalyticsService <--> AnalyticsCache
     AnalyticsService <--> AnalyticsDB
     
-    Gateway <-->|Build/Render| MicrositeService
+    Gateway <--> MicrositeService
     MicrositeService <--> MicrositeDB
-    MicrositeService -->|Upload| MicrositeStorage
+    MicrositeService <--> MicrositeStorage
     
-    QRService -->|qr.created| Kafka
-    AnalyticsService -->|scan.tracked| Kafka
-    Kafka -->|Consume| Consumers
+    QRService --> Kafka
+    AnalyticsService --> Kafka
+    Kafka --> Consumers
     Consumers --> AnalyticsDB
 ```
 
