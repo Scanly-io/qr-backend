@@ -1,4 +1,4 @@
-# 🎯 Enterprise QR & Microsite SaaS Platform
+# Enterprise QR & Microsite SaaS Platform
 
 ### *A Technical PM's Journey: When Enterprise Architecture Meets Mom's Corner Store*
 
@@ -17,20 +17,20 @@ In August 2025, I began a deep dive into building an enterprise-grade solution�
 
 ---
 
-## 📖 Table of Contents
-- [Overview & Motivation](#-overview--motivation)
-- [Product Strategy & Scope](#-product-strategy--scope)
-- [Project Management & Execution](#-project-management--execution)
-- [System Architecture Design](#-system-architecture-design)
-- [Phase 1: MVP Deployment](#-phase-1-mvp-deployment)
-- [Roadmap & Future Phases](#-roadmap--future-phases)
-- [Key Outcomes](#-key-outcomes)
-- [Getting Started](#-getting-started)
-- [Contact](#-contact)
+## Table of Contents
+- [Overview & Motivation](#overview--motivation)
+- [Product Strategy & Scope](#product-strategy--scope)
+- [Project Management & Execution](#project-management--execution)
+- [System Architecture Design](#system-architecture-design)
+- [Phase 1: MVP Deployment](#phase-1-mvp-deployment)
+- [Roadmap & Future Phases](#roadmap--future-phases)
+- [Key Outcomes](#key-outcomes)
+- [Getting Started](#getting-started)
+- [Contact](#contact)
 
 ---
 
-## 🚀 Overview & Motivation
+## Overview & Motivation
 
 ### The Problem: The "A/A Gap" (Availability vs Accessibility)
 
@@ -52,7 +52,7 @@ This became a case study in **balancing technical ambition with operational real
 
 ---
 
-## 💡 Product Thinking & Competitive Analysis
+## Product Thinking & Competitive Analysis
 
 ### Competitor Research (5 Platforms Analyzed)
 
@@ -67,14 +67,14 @@ This became a case study in **balancing technical ambition with operational real
 ### The "Accessibility Gap" Discovery
 
 **User research insight (from mom's shop):**
-- 🔴 **Pain Point 1:** Existing tools require technical knowledge to set up domains
-- 🔴 **Pain Point 2:** No clear analytics for offline-to-online tracking (QR scans in store)
-- 🔴 **Pain Point 3:** Design tools (Canva) don't connect to business logic (Shopify)
+- **Pain Point 1:** Existing tools require technical knowledge to set up domains
+- **Pain Point 2:** No clear analytics for offline-to-online tracking (QR scans in store)
+- **Pain Point 3:** Design tools (Canva) don't connect to business logic (Shopify)
 
 **Product strategy decision:**
-- ✅ One platform for QR codes + microsites + analytics
-- ✅ Drag-and-drop editor (no coding required)
-- ✅ Real-time scan tracking (bridge offline and online)
+- One platform for QR codes + microsites + analytics
+- Drag-and-drop editor (no coding required)
+- Real-time scan tracking (bridge offline and online)
 
 ### Target Market & Positioning
 
@@ -90,7 +90,7 @@ This became a case study in **balancing technical ambition with operational real
 
 ---
 
-## 🛠️ The Toolkit: My 2026 AI-Powered Stack
+## The Toolkit: My 2026 AI-Powered Stack
 
 **I'm a Project Manager, not a professional developer.** So how do you manage the build of 18 microservices? You leverage the right tools and treat AI as your "virtual engineering squad."
 
@@ -120,17 +120,17 @@ This became a case study in **balancing technical ambition with operational real
 ### The TPM's Role in 2026
 
 **What I managed:**
-- ✅ Architecture design and service boundaries
-- ✅ API contracts and database schemas
-- ✅ Security requirements (8/10 OWASP score)
-- ✅ Performance targets (100x faster with caching)
-- ✅ Cost optimization (deployed at <$50/month)
+- Architecture design and service boundaries
+- API contracts and database schemas
+- Security requirements (8/10 OWASP score)
+- Performance targets (100x faster with caching)
+- Cost optimization (deployed at <$50/month)
 
 **What AI executed:**
-- 🤖 Boilerplate service code
-- 🤖 Database migrations
-- 🤖 API endpoint implementation
-- 🤖 Unit tests and validation logic
+- Boilerplate service code
+- Database migrations
+- API endpoint implementation
+- Unit tests and validation logic
 
 **Key learning:** *A TPM's role in 2026 is guiding the architecture, not typing every semicolon.*
 
@@ -168,9 +168,9 @@ This project was my hands-on masterclass in **FinOps, user-centric design, and r
 **Reality:** Deployed 4 core services in Phase 1, deferred 14 services to Phase 2/3
 
 **Agile pivot:**
-- ✅ Auth, QR, Analytics, Microsite (core value delivered)
-- ⏸️ ML, Email, Integrations (deferred until customer revenue)
-- ✅ Architecture documented for future scaling
+- Auth, QR, Analytics, Microsite (core value delivered)
+- ML, Email, Integrations (deferred until customer revenue)
+- Architecture documented for future scaling
 
 **Key learning:** *Incremental delivery > Big Bang releases.*
 
@@ -203,7 +203,7 @@ This project was my hands-on masterclass in **FinOps, user-centric design, and r
 
 ---
 
-## 🏗️ System Architecture Design
+## System Architecture Design
 
 ### Full Architecture Vision (19 Services)
 
@@ -327,19 +327,19 @@ flowchart TD
 - Issues: Too many labels, hard to follow flow, overwhelming for recruiters
 
 **Version 2 (Cleaned up - Above):**
-- ✅ **Simplified labels** - Removed verbose descriptions (e.g., "QR Service" instead of "QR Service - Public: /scan/:id (No Auth)")
-- ✅ **Grouped layers** - Edge & Security in one subgraph, cleaner hierarchy
-- ✅ **Reduced connection labels** - Only essential info (HTTPS, SQL, Events)
-- ✅ **Clean legend** - Simple sync vs async indicator
-- ✅ **Professional theme** - Default theme (not handDrawn) for clean rendering
+- **Simplified labels** - Removed verbose descriptions (e.g., "QR Service" instead of "QR Service - Public: /scan/:id (No Auth)")
+- **Grouped layers** - Edge & Security in one subgraph, cleaner hierarchy
+- **Reduced connection labels** - Only essential info (HTTPS, SQL, Events)
+- **Clean legend** - Simple sync vs async indicator
+- **Professional theme** - Default theme (not handDrawn) for clean rendering
 
 **Key improvements:**
 1. **Readability** - Can understand flow in 7 seconds (recruiter test)
 2. **Visual hierarchy** - Clear User → Edge → Core → Data → Events flow
 3. **Less clutter** - Removed technical details (moved to README text)
 4. **Professional polish** - Matches "Senior TPM brand"
-- ✅ Clear visual hierarchy (User → CDN → Gateway → Services → Data)
-- ✅ GitHub renders natively (no external images needed)
+- Clear visual hierarchy (User → CDN → Gateway → Services → Data)
+- GitHub renders natively (no external images needed)
 
 **Key Takeaway:** *Iteration based on feedback—went from 7/10 to production-ready diagram.*
 
@@ -500,7 +500,7 @@ The **Tenant Gateway** is the single entry point for all traffic, making it the 
 
 ---
 
-## 🚀 Phase 1: MVP Deployment
+## Phase 1: MVP Deployment
 
 ### Scope & Infrastructure Decisions
 
@@ -527,14 +527,14 @@ The **Tenant Gateway** is the single entry point for all traffic, making it the 
 ### What's NOT Deployed (Yet)
 
 **Deferred to Phase 2+ (Post-Revenue):**
-- ❌ ML Service (AI content generation) - Requires OpenAI API costs
-- ❌ Email Service - Using transactional email free tier for now
-- ❌ Integrations Service - Zapier, webhooks (low priority for MVP)
-- ❌ Domains Service - Custom domains (enterprise feature)
-- ❌ Experiments Service - A/B testing (requires traffic first)
-- ❌ Advanced Analytics - Mixpanel integration (free tier sufficient)
-- ❌ Kafka Event Bus - Direct calls work for low traffic MVP
-- ❌ Cloudflare CDN - Single region handles initial users
+- ML Service (AI content generation) - Requires OpenAI API costs
+- Email Service - Using transactional email free tier for now
+- Integrations Service - Zapier, webhooks (low priority for MVP)
+- Domains Service - Custom domains (enterprise feature)
+- Experiments Service - A/B testing (requires traffic first)
+- Advanced Analytics - Mixpanel integration (free tier sufficient)
+- Kafka Event Bus - Direct calls work for low traffic MVP
+- Cloudflare CDN - Single region handles initial users
 
 ### MVP Feature Set
 
@@ -551,9 +551,9 @@ The **Tenant Gateway** is the single entry point for all traffic, making it the 
 
 ---
 
-## �️ Roadmap & Future Phases
+## Roadmap & Future Phases
 
-### Phase 1: MVP - Product Validation ✅ **CURRENT**
+### Phase 1: MVP - Product Validation **CURRENT**
 **Timeline:** Q1 2026 (Completed)  
 **Goal:** Validate product-market fit with core features  
 **Investment:** $30-50/month infrastructure
@@ -573,7 +573,7 @@ The **Tenant Gateway** is the single entry point for all traffic, making it the 
 
 ---
 
-### Phase 2: Growth Features 🚧 **PLANNED**
+### Phase 2: Growth Features **PLANNED**
 **Timeline:** Q2-Q3 2026  
 **Goal:** Add differentiated features post-customer validation  
 **Investment:** $200-300/month (scales with revenue)
@@ -600,7 +600,7 @@ The **Tenant Gateway** is the single entry point for all traffic, making it the 
 
 ---
 
-### Phase 3: Enterprise Scale 🔮 **FUTURE**
+### Phase 3: Enterprise Scale **FUTURE**
 **Timeline:** Q4 2026 - Q1 2027  
 **Goal:** Enterprise-ready platform with full 19-service architecture  
 **Investment:** $1,000+/month (customer-funded)
@@ -663,7 +663,7 @@ The **Tenant Gateway** is the single entry point for all traffic, making it the 
 
 ---
 
-## ✨ Key Outcomes
+## Key Outcomes
 
 ### Project Management Success
 - ✅ **Delivered on time** - Phase 1 MVP completed within planned timeline
@@ -691,7 +691,7 @@ The **Tenant Gateway** is the single entry point for all traffic, making it the 
 
 ---
 
-## �️ Getting Started
+## Getting Started
 
 > **Note:** This repository contains Phase 1 MVP deployment (4 services). The full 19-service architecture is documented but not deployed to minimize infrastructure costs.
 
@@ -750,7 +750,7 @@ If you're reviewing this for a **TPM/Product role**, focus on:
 
 ---
 
-## 📚 Documentation
+## Documentation
 
 ### Product & Strategy Documents
 
@@ -775,7 +775,7 @@ If you're reviewing this for a **TPM/Product role**, focus on:
 
 ---
 
-## 🎓 Skills Demonstrated
+## Skills Demonstrated
 
 ### Product Management Core Competencies
 
@@ -811,7 +811,7 @@ If you're reviewing this for a **TPM/Product role**, focus on:
 
 ---
 
-## 🚧 Roadmap & Future Enhancements
+## Roadmap & Future Enhancements
 
 ### Planned Features
 - [ ] Kubernetes deployment (Helm charts)
@@ -830,7 +830,7 @@ If you're reviewing this for a **TPM/Product role**, focus on:
 
 ---
 
-## 🤝 Contact & Connect
+## Contact & Connect
 
 **Saurabh Bansal**  
 Technical Product Manager | System Architect
@@ -842,13 +842,13 @@ Technical Product Manager | System Architect
 
 ---
 
-## 📄 License
+## License
 
 This project is available under the **MIT License** - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - **Fastify** - High-performance web framework
 - **PostgreSQL** - Robust relational database
