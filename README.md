@@ -221,70 +221,81 @@ User → Cloudflare CDN → Nginx → Tenant Gateway → Microservices → Data 
 
 ```mermaid
 flowchart TB
-    User[User]
-    CDN[Cloudflare CDN]
-    Nginx[Nginx Reverse Proxy]
+    User[👤 User]
+    CDN[☁️ Cloudflare CDN]
+    Nginx[⚙️ Nginx]
     
-    subgraph gateway[" GATEWAY "]
-        Gateway[API Gateway<br/>Rate Limiting + Auth]
-        RateLimitRedis[(Redis<br/>Rate Limits)]
+    subgraph gateway[" 🔐 GATEWAY "]
+        Gateway[API Gateway]
+        RateLimitRedis[(Rate Limit<br/>Redis)]
     end
     
-    subgraph auth[" AUTH SERVICE "]
-        AuthService[Auth Logic<br/>JWT + Sessions]
-        AuthDB[(PostgreSQL<br/>Users/Tokens)]
+    subgraph auth[" 🔑 AUTH SERVICE "]
+        AuthService[Auth Logic]
+        AuthDB[(Users DB<br/>PostgreSQL)]
     end
     
-    subgraph qr[" QR SERVICE "]
-        QRService[QR Generation<br/>Scan Tracking]
-        QRCache[(Redis<br/>QR Metadata)]
-        QRDB[(PostgreSQL<br/>QR Codes)]
-        QRStorage[R2 Storage<br/>QR Images]
+    subgraph qr[" 📱 QR SERVICE "]
+        QRService[QR Generator]
+        QRCache[(QR Cache<br/>Redis)]
+        QRDB[(QR Codes DB<br/>PostgreSQL)]
+        QRStorage[QR Images<br/>R2]
     end
     
-    subgraph analytics[" ANALYTICS SERVICE "]
-        AnalyticsService[Analytics Engine<br/>Metrics Processing]
-        AnalyticsCache[(Redis<br/>Hot Metrics)]
-        AnalyticsDB[(PostgreSQL<br/>Scan Events)]
+    subgraph analytics[" 📊 ANALYTICS SERVICE "]
+        AnalyticsService[Analytics Engine]
+        AnalyticsCache[(Hot Metrics<br/>Redis)]
+        AnalyticsDB[(Scan Events DB<br/>PostgreSQL)]
     end
     
-    subgraph microsite[" MICROSITE SERVICE "]
-        MicrositeService[Page Builder<br/>Theme Rendering]
-        MicrositeDB[(PostgreSQL<br/>Pages/Blocks)]
-        MicrositeStorage[R2 Storage<br/>Media Files]
+    subgraph microsite[" 🌐 MICROSITE SERVICE "]
+        MicrositeService[Page Builder]
+        MicrositeDB[(Pages DB<br/>PostgreSQL)]
+        MicrositeStorage[Media Files<br/>R2]
     end
     
-    Kafka[Kafka Event Queue<br/>qr.created, scan.tracked]
-    Consumers[Background Processors<br/>Analytics/ML/Email]
+    Kafka[📮 Kafka Events]
+    Consumers[⚡ Background Jobs]
     
-    User <--> CDN
-    CDN <--> Nginx
-    Nginx <--> Gateway
-    Gateway <--> RateLimitRedis
+    User <-->|HTTPS| CDN
+    CDN <-->|Route| Nginx
+    Nginx <-->|Proxy| Gateway
+    Gateway <-->|Check Limit| RateLimitRedis
     
-    Gateway <--> AuthService
-    AuthService <--> AuthDB
+    Gateway <-->|Verify JWT| AuthService
+    AuthService <-->|SQL Query| AuthDB
     
-    Gateway <--> QRService
-    QRService <--> QRCache
-    QRService <--> QRDB
-    QRService <--> QRStorage
-    QRService --> Kafka
+    Gateway <-->|REST API| QRService
+    QRService <-->|Cache Get/Set| QRCache
+    QRService <-->|SQL Read/Write| QRDB
+    QRService <-->|Upload Image| QRStorage
+    QRService -.->|Publish Event| Kafka
     
-    Gateway <--> AnalyticsService
-    AnalyticsService <--> AnalyticsCache
-    AnalyticsService <--> AnalyticsDB
-    AnalyticsService --> Kafka
+    Gateway <-->|REST API| AnalyticsService
+    AnalyticsService <-->|INCR Counter| AnalyticsCache
+    AnalyticsService <-->|SQL Insert| AnalyticsDB
+    AnalyticsService -.->|Publish Event| Kafka
     
-    Gateway <--> MicrositeService
-    MicrositeService <--> MicrositeDB
-    MicrositeService <--> MicrositeStorage
+    Gateway <-->|REST API| MicrositeService
+    MicrositeService <-->|SQL Read/Write| MicrositeDB
+    MicrositeService <-->|Upload File| MicrositeStorage
     
-    QRService <--> MicrositeService
+    QRService <-->|Get Page Data| MicrositeService
     
-    Kafka --> Consumers
-    Consumers --> AnalyticsDB
+    Kafka -.->|Consume| Consumers
+    Consumers -->|Batch Write| AnalyticsDB
+    
+    style User fill:#60a5fa,color:#fff
+    style Kafka fill:#f59e0b,color:#fff
+    style Consumers fill:#8b5cf6,color:#fff
 ```
+
+**Legend:**
+- **Solid arrows (<-->)** = Synchronous request/response (HTTP/REST API)
+- **Dotted arrows (-.->)** = Asynchronous events (fire-and-forget)
+- **Cylinders [(DB)]** = Data storage (PostgreSQL, Redis, R2)
+- **Rectangles [Service]** = Processing logic
+- **Grouped boxes** = Service boundaries (owns its data)
 
 **What this shows:**
 
