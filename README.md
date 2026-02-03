@@ -217,7 +217,7 @@ User → Cloudflare CDN → Nginx → Tenant Gateway → Microservices → Data 
 
 ### Architecture Diagram
 
-**Simple Request Flow:** This shows how a user request flows through the system.
+**Simple Request Flow:** This shows how a user request flows through the system and back.
 
 ```mermaid
 flowchart TB
@@ -235,24 +235,24 @@ flowchart TB
     KafkaQueue[Kafka<br/>Event Queue]
     EventConsumers[Background Processors<br/>Analytics/ML/Email]
     
-    User -->|HTTPS| CDN
-    CDN --> Nginx
-    Nginx --> Gateway
+    User <-->|HTTPS Request/Response| CDN
+    CDN <--> Nginx
+    Nginx <--> Gateway
     
-    Gateway -->|Check Rate Limit| RateLimitRedis
-    Gateway -->|Authenticate| Auth
+    Gateway <-->|Check Rate Limit| RateLimitRedis
+    Gateway <-->|Authenticate| Auth
     
-    Gateway --> QR
-    Gateway --> Analytics
-    Gateway --> Microsite
+    Gateway <--> QR
+    Gateway <--> Analytics
+    Gateway <--> Microsite
     
-    QR --> CacheRedis
-    QR --> Postgres
+    QR <--> CacheRedis
+    QR <--> Postgres
     
-    Analytics --> CacheRedis
-    Analytics --> Postgres
+    Analytics <--> CacheRedis
+    Analytics <--> Postgres
     
-    Microsite --> Postgres
+    Microsite <--> Postgres
     
     QR -->|Publish Events| KafkaQueue
     Analytics -->|Publish Events| KafkaQueue
