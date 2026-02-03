@@ -280,6 +280,8 @@ flowchart TB
     MicrositeService <--> MicrositeDB
     MicrositeService <--> MicrositeStorage
     
+    QRService <--> MicrositeService
+    
     Kafka --> Consumers
     Consumers --> AnalyticsDB
 ```
@@ -300,6 +302,7 @@ flowchart TB
 - **R2 Storage is duplicated** - QR images vs Microsite media (separate buckets)
 - **Kafka enables loose coupling** - Services publish events without knowing who consumes them
 - **Hot metrics sync** - Redis stores real-time counters (page views, scan counts), Background Processors flush to PostgreSQL every 60 seconds
+- **QR ↔ Microsite integration** - When a QR code is scanned, QR Service queries Microsite Service to fetch the linked microsite page
 
 **Key Architecture Decisions:**
 
