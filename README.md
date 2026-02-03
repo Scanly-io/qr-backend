@@ -255,7 +255,7 @@ flowchart TB
     end
     
     subgraph events[" EVENT PROCESSING "]
-        Kafka[Kafka Event Queue<br/>qr.created | scan.tracked]
+        Kafka[Kafka Event Queue<br/>qr.created, scan.tracked]
         Consumers[Background Processors<br/>Analytics/ML/Email]
     end
     
