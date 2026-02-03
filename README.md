@@ -217,7 +217,58 @@ User → Cloudflare CDN → Nginx → Tenant Gateway → Microservices → Data 
 
 ### Architecture Diagram
 
-**The Blueprint:** This diagram was my project charter. I created this visual using **Mermaid.js** ("Diagrams as Code") to ensure alignment and communicate the architecture to both technical and non-technical stakeholders.
+**Simple Request Flow:** This shows how a user request flows through the system.
+
+```mermaid
+flowchart TB
+    User[User]
+    CDN[Cloudflare CDN]
+    Nginx[Nginx]
+    Gateway[API Gateway]
+    Auth[Auth Service]
+    QR[QR Service]
+    Analytics[Analytics Service]
+    Microsite[Microsite Service]
+    Postgres[(PostgreSQL)]
+    Redis[(Redis Cache)]
+    Kafka[Kafka Events]
+    
+    User -->|HTTPS| CDN
+    CDN --> Nginx
+    Nginx --> Gateway
+    
+    Gateway -->|Authenticate| Auth
+    Gateway -->|Rate Limit| Redis
+    
+    Gateway --> QR
+    Gateway --> Analytics
+    Gateway --> Microsite
+    
+    QR --> Postgres
+    Analytics --> Postgres
+    Microsite --> Postgres
+    
+    QR --> Redis
+    Analytics --> Redis
+    
+    QR -->|Publish Events| Kafka
+    Analytics -->|Publish Events| Kafka
+```
+
+**What this shows:**
+1. **User requests** come through Cloudflare CDN for security and speed
+2. **Nginx** routes traffic to the API Gateway
+3. **Gateway** handles authentication (via Auth Service) and rate limiting (via Redis)
+4. **Core Services** (QR, Analytics, Microsite) process business logic
+5. **Data Layer** stores data in PostgreSQL and caches in Redis
+6. **Event Bus** (Kafka) handles asynchronous background tasks
+
+**Key Architecture Decisions:**
+- **Gateway-centric:** Single entry point for observability and security
+- **Cache-first:** Redis checks before database (100x performance improvement)
+- **Event-driven:** Kafka enables loose coupling between services
+
+---
 
 > 📊 **[View Interactive Diagram on Mermaid Live →](https://mermaid.live/edit#pako:eNqVVU1v2zAM_SuCTkuBpIe1QIEgQNEVKLpih2KHwpdAsmNVH5YkJ2nQ_PfRcpI2aYYhzSGwRD0-PpKPVJAVKQkFwVOZc8RhzQrFNiwTuBEr0LRYslziJGaF1AqX6A1rscIlR5bIAmeMw5qVkueMgaQVE3ABL3G5QSW0kCk8lxJWmhdCaVgxDpKXJZNKwkoIni_5FlZ8K_iWS4EFLkErWDOJBReSKwYMM2DSYikYE_CZ53AFkvO84kKl8EQlrARvBWQpE_CSFSsGnHMhUY3P-LziW8kYfOKCwa_n57-_3f_6cfPz9vbxHh7v7-8e4O7u9_39t9vvt4_wdPf46-Hx9vb2m4B0CzIFr1BmpcwZaNwKmcJLRcs15xLTeKtyxjaQamRUohKYahDBVDMNmhcsWTHNUZGKSTDqJSaVRCXQSr5lEmVKb1Ut64xXXKUo0XBOpa7OTJgUTKJE1VU5V6ika0RJt0wiE9pK0LTmqVCQbXkmM0TgFdNbVjCO_r1UiZJZqfJSaVxCViohc8yQS67Aiipkqbi-Ym-VVDIH_UJEVrEU8lJlXDEGnMkXUBzWTKdcMJDIKlS4RSuqpOSKaVC0RCW5ZhqVTCGVuGU8K7lSGpUQKeRaKVAcM14IybMSGWRSo0SFm5RXTOuUtBKQUckY_JYyBc-lTFGBTktZMakR1fOM5ygxg7xUIJnK6RtXNX8bJ_1-p9ftdXqd_qjb7Y-6g8FoOBz1-v3BcNTv9kbD4WjQGw2H_V5_1O8NRoNedziCXqfb63UHvU6v0-0Oer1ud9DrDDrd4ag_6vSH_U5vMOh0B4NeZ9Qf9gf9fq_XGfV7w06nOxz0ur3esNvpdAf9Xq876g-7nU5_0O_1BqNe_-hwOOr3h6PecNTrDQej_rDXH3Q6w-6gOxz1Or1Op98dDLqd_mg46g37nV6v2x_1u73hqN_rdvuDTnc46A-7o06n1xkOe71ef9Qf9rr9fq_XHQ5H_U6_0xsO-_1er9sfdnv9Tn846g87vU6_3-8Nur3RcNDpdnvdQbc3HA56w26_2-v1R_1Bp9cbdPu9frc_7Hd7_V5v0O8Oh_1er9sbdXu9Xrc_7Pd6g26v1-91u8Nhv9ftdnvdQbc_6PeGvV6v2-t1e_1Rv9vtDge9bqfb6_YG_UGv1-92u_1uv9ftdPvdXr_f6w86_eFw0O_2uoPuoNcf9rq9fr_fGw76_U6v2-n2u_1hr9vvdvu9Xr_f7w-6vf6w2-l2e_1er9cfDrvdQb_bHXQ73V6v2-v1e8N-v9PrdXv9frc_6HR6_W6v1-8P-91ut9vr9fu9br_X6w-6nf6w0-v1-71ev9cbd7vtbq_X7w96_WG_2-v1BsPeoNvtdvu9bqfb7_UH_V6v1xv0ut1er9fr93vDfq/b7XT7vX6v2x8Mur1ev9vt97vd_nDQ7fa6vX6v3x_0ev1ep9Pt9nv9fr_X6_YH_W6v2-v1-8Nuv9ftdvv9fr_f6w8G3U6v2-_1-_1utzvodvv9Qbc_6Pd7vX6_2-8P-v3-sNPt9Xv9Xr_f7_d6_X6_1-v3e_1-v9_v97vdXr_f7_f73X6v3-_3e_1-v9fv9_v9Xr_f6_f7_X6_3-_1-_1-v9fv9_v9fr_f7_f7_X6_3-_3-_1-v9_v9_v9fr_f7_f7_f7_X6_3-_3-_1-v9_v9_v9fr_f7_f7_f7_f6_3-_3-_3-_1-v9_v9_v9_v9fr_f7_f7_f7_f7_X6_3-_3-_3-_3-_1-v9_v9_v9_v9_v9)**
 
