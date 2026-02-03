@@ -19,14 +19,16 @@ In August 2025, I began a deep dive into building an enterprise-grade solutionâ€
 
 ## Table of Contents
 - [Overview & Motivation](#overview--motivation)
-- [Product Strategy & Scope](#product-strategy--scope)
-- [Project Management & Execution](#project-management--execution)
+- [Product Thinking & Competitive Analysis](#product-thinking--competitive-analysis)
+- [The Toolkit: My 2026 AI-Powered Stack](#the-toolkit-my-2026-ai-powered-stack)
 - [System Architecture Design](#system-architecture-design)
 - [Phase 1: MVP Deployment](#phase-1-mvp-deployment)
 - [Roadmap & Future Phases](#roadmap--future-phases)
 - [Key Outcomes](#key-outcomes)
 - [Getting Started](#getting-started)
-- [Contact](#contact)
+- [Documentation](#documentation)
+- [Skills Demonstrated](#skills-demonstrated)
+- [Contact & Connect](#contact--connect)
 
 ---
 
