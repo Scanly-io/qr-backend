@@ -215,9 +215,9 @@ The platform was **designed** as a decoupled, service-oriented architecture for 
 User → Cloudflare CDN → Nginx → Tenant Gateway → Microservices → Data Layer
 ```
 
-### Architecture Diagram
+### C4 Model - Level 2: Container Diagram
 
-**System Overview:** This shows clear service boundaries and how each service manages its own data.
+**Technology Architecture:** This diagram shows the high-level technology choices and how containers (applications, data stores, message queues) communicate. Each container is a separately deployable/runnable unit that executes code or stores data.
 
 ```mermaid
 flowchart TB
@@ -297,16 +297,72 @@ flowchart TB
 - **Rectangles [Service]** = Processing logic
 - **Grouped boxes** = Service boundaries (owns its data)
 
-**What this shows:**
+**Container Types in This Architecture:**
 
-1. **Edge Layer** - Gateway handles all traffic, rate limiting, and authentication
-2. **Auth Service** - User management with dedicated PostgreSQL database
-3. **QR Service** - QR code generation with Redis cache, PostgreSQL storage, and R2 for images
-4. **Analytics Service** - Scan tracking with Redis for hot metrics and PostgreSQL for historical data
-5. **Microsite Service** - Page builder with PostgreSQL for content and R2 for media files
-6. **Event Processing** - Kafka queue decouples services for async processing
+**1. Web Applications (Node.js + Fastify)**
+- 🔐 **API Gateway** - Entry point, rate limiting, JWT validation (Port 3000)
+- 🔑 **Auth Service** - User authentication, session management (Port 3010)
+- 📱 **QR Service** - QR code generation and management (Port 3011)
+- 📊 **Analytics Service** - Metrics processing and reporting (Port 3012)
+- 🌐 **Microsite Service** - Landing page builder (Port 3013)
 
-**Service Boundaries Explained:**
+**2. Data Stores**
+- **PostgreSQL Databases** - Relational data (Users, QR Codes, Analytics, Pages)
+- **Redis Caches** - In-memory storage (Rate limits, QR metadata, Hot metrics)
+- **Cloudflare R2** - Object storage (QR images, Media files)
+
+**3. Message Infrastructure**
+- 📮 **Kafka Event Bus** - Asynchronous event streaming (13 topics designed)
+- ⚡ **Background Jobs (Consumers)** - Event processors (Node.js workers)
+
+**4. Edge Infrastructure**
+- ☁️ **Cloudflare CDN** - Global edge caching and DDoS protection
+- ⚙️ **Nginx** - Reverse proxy and load balancer
+
+**Why This C4 Container Diagram Shows:**
+
+**Service Isolation & Ownership:**
+- Each service owns its data - No shared databases (except in MVP where all PostgreSQL instances are in one DB)
+- Services communicate via well-defined APIs (REST) or events (Kafka)
+- Containers can scale independently based on load
+
+**Technology Decisions Visible:**
+- **Runtime**: Node.js 20+ with Fastify framework for all web services
+- **Databases**: PostgreSQL for relational data, Redis for caching
+- **Storage**: Cloudflare R2 for static assets (S3-compatible)
+- **Messaging**: Kafka for event-driven architecture
+- **Edge**: Cloudflare CDN + Nginx for traffic management
+
+**Communication Patterns:**
+- **Synchronous (Solid arrows)**: REST API calls for real-time operations (QR creation, user queries)
+- **Asynchronous (Dotted arrows)**: Kafka events for background processing (analytics, notifications)
+- **Cache-First**: Redis checked before PostgreSQL for 100x performance improvement
+- **Event-Driven**: Services publish events without knowing who consumes them (loose coupling)
+
+**Deployment & Scaling:**
+- **Phase 1 (MVP)**: All containers run on single VPS, shared PostgreSQL/Redis instances
+- **Phase 2 (Growth)**: Services split across multiple VPS, Kafka cluster added
+- **Phase 3 (Enterprise)**: Kubernetes orchestration, per-tenant databases, Redis cluster
+
+---
+
+### Why C4 Level 2 Matters for TPM Roles
+
+**This Container Diagram demonstrates:**
+- ✅ **Technology Selection** - Chose Node.js (team familiarity), PostgreSQL (ACID compliance), Redis (performance)
+- ✅ **Scalability Planning** - Each container can scale independently (horizontal scaling ready)
+- ✅ **Cost Awareness** - Designed for enterprise scale ($1000/month), deployed lean MVP ($50/month)
+- ✅ **Communication Strategy** - Async events for non-critical paths, sync APIs for user-facing operations
+- ✅ **Trade-off Analysis** - Single PostgreSQL in Phase 1 vs per-tenant DBs in Phase 3
+
+**What recruiters see:**
+- Clear understanding of modern tech stack (microservices, event-driven, caching)
+- Ability to communicate architecture to technical and non-technical stakeholders
+- Strategic thinking (phased deployment based on revenue triggers)
+
+---
+
+**Service Boundaries Explained (for deeper context):**
 
 - **Each service owns its data** - No shared databases (except in MVP where all PostgreSQL instances are in one DB)
 - **Redis is duplicated for clarity** - Rate limiting (Gateway) vs application caching (QR/Analytics)
