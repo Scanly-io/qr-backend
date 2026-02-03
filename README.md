@@ -215,6 +215,97 @@ The platform was **designed** as a decoupled, service-oriented architecture for 
 User → Cloudflare CDN → Nginx → Tenant Gateway → Microservices → Data Layer
 ```
 
+---
+
+### C4 Model - Level 1: System Context Diagram
+
+**The Big Picture:** How the QR & Microsite Platform fits into the broader ecosystem of users and external systems.
+
+```mermaid
+graph TB
+    %% Users (People)
+    Owner[👤 Business Owner<br/><small>Manages QR codes<br/>and microsites</small>]
+    Customer[🛍️ End Customer<br/><small>Scans QR codes<br/>in physical locations</small>]
+    Creator[🎨 Content Creator<br/><small>Builds link-in-bio<br/>pages</small>]
+    Agency[🏢 Marketing Agency<br/><small>Manages multiple<br/>client campaigns</small>]
+
+    %% The System (Central)
+    System[⚡ QR & Microsite SaaS Platform<br/><small>Generate QR codes, build microsites,<br/>track analytics in real-time</small>]
+
+    %% External Systems
+    OpenAI[🤖 OpenAI API<br/><small>GPT-4 for AI content<br/>generation</small>]
+    Cloudflare[☁️ Cloudflare CDN<br/><small>Global edge caching<br/>and DDoS protection</small>]
+    SendGrid[📧 SendGrid<br/><small>Transactional email<br/>delivery</small>]
+    Twilio[📱 Twilio<br/><small>SMS notifications<br/>and alerts</small>]
+    Stripe[💳 Stripe<br/><small>Payment processing<br/>and subscriptions</small>]
+    Mixpanel[📊 Mixpanel<br/><small>Product analytics<br/>and user tracking</small>]
+    Sentry[🐛 Sentry<br/><small>Error tracking<br/>and monitoring</small>]
+
+    %% User → System interactions
+    Owner -->|Creates QR codes<br/>Builds microsites<br/>Views analytics<br/><small>HTTPS</small>| System
+    Creator -->|Creates link-in-bio pages<br/>Customizes branding<br/><small>HTTPS</small>| System
+    Agency -->|Manages client campaigns<br/>Bulk QR generation<br/><small>HTTPS</small>| System
+    Customer -->|Scans QR codes<br/>Views microsites<br/><small>HTTPS</small>| System
+
+    %% System → External Systems interactions
+    System -->|Generates AI content<br/>Smart descriptions<br/><small>REST API</small>| OpenAI
+    System -->|Serves QR images<br/>Delivers microsites<br/><small>CDN Edge</small>| Cloudflare
+    System -->|Sends welcome emails<br/>Scan notifications<br/><small>REST API</small>| SendGrid
+    System -->|Sends SMS alerts<br/>Limit exceeded warnings<br/><small>REST API</small>| Twilio
+    System -->|Processes payments<br/>Manages subscriptions<br/><small>REST API</small>| Stripe
+    System -->|Tracks user events<br/>Funnel analysis<br/><small>REST API</small>| Mixpanel
+    System -->|Reports errors<br/>Performance issues<br/><small>REST API</small>| Sentry
+
+    %% Styling
+    classDef userStyle fill:#60a5fa,stroke:#1e40af,stroke-width:2px,color:#fff
+    classDef systemStyle fill:#10b981,stroke:#059669,stroke-width:3px,color:#fff
+    classDef externalStyle fill:#f59e0b,stroke:#d97706,stroke-width:2px,color:#fff
+
+    class Owner,Customer,Creator,Agency userStyle
+    class System systemStyle
+    class OpenAI,Cloudflare,SendGrid,Twilio,Stripe,Mixpanel,Sentry externalStyle
+```
+
+**What This System Context Shows:**
+
+**1. People Using The System (4 User Types)**
+- **👤 Business Owner** - Small shop owner (like mom's store) managing QR codes for physical products
+- **🛍️ End Customer** - Scans QR codes in shops, restaurants, events to view microsites
+- **🎨 Content Creator** - Influencers building link-in-bio pages for Instagram/TikTok
+- **🏢 Marketing Agency** - B2B clients managing campaigns for multiple businesses
+
+**2. The System (Black Box)**
+- **⚡ QR & Microsite SaaS Platform** - Your entire 19-service architecture appears as ONE system
+- Users don't care about internal services (Gateway, Auth, QR, Analytics, etc.)
+- Focus is on **what it does**, not **how it does it**
+
+**3. External Systems (7 Dependencies)**
+- **🤖 OpenAI API** - AI-powered content generation (Phase 2)
+- **☁️ Cloudflare CDN** - Global performance and security
+- **📧 SendGrid** - Email notifications (welcome, scan alerts)
+- **📱 Twilio** - SMS alerts (scan limits, important notifications)
+- **💳 Stripe** - Payment processing and subscription billing
+- **📊 Mixpanel** - Product analytics and user behavior tracking
+- **🐛 Sentry** - Error monitoring and performance tracking
+
+**4. Interactions (What Flows Between Them)**
+- **User → System**: HTTPS requests (web browser, mobile)
+- **System → External APIs**: REST API calls (JSON over HTTPS)
+- **System → CDN**: Edge caching for static assets
+
+**Why This Matters for TPM Interviews:**
+
+✅ **Business Context** - Shows you understand 4 distinct user personas (not just "users")  
+✅ **Integration Strategy** - 7 external dependencies managed (vendor selection decisions)  
+✅ **Phased Approach** - OpenAI marked for Phase 2 (cost-conscious planning)  
+✅ **Stakeholder Communication** - Simple diagram for non-technical audiences (executives, investors)
+
+**From Context to Containers:**
+- This Level 1 diagram shows the **business view** (what problems we solve, for whom)
+- The Level 2 Container Diagram (below) shows the **technology view** (how we built it)
+
+---
+
 ### C4 Model - Level 2: Container Diagram
 
 **Technology Architecture:** This diagram shows the high-level technology choices and how containers (applications, data stores, message queues) communicate. Each container is a separately deployable/runnable unit that executes code or stores data.
