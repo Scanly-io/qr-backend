@@ -534,9 +534,9 @@ flowchart TB
 
 **Deployment & Scaling:**
 
-- **Phase 1 (MVP)**: All containers run on single VPS, shared PostgreSQL/Redis instances
-- **Phase 2 (Growth)**: Services split across multiple VPS, Kafka cluster added
-- **Phase 3 (Enterprise)**: Kubernetes orchestration, per-tenant databases, Redis cluster
+- **Phase 1 (MVP)**: Single VPS, shared PostgreSQL/Redis, Kafka single-node (Redpanda)
+- **Phase 2 (Growth)**: Multi-VPS deployment, Kafka 3-node cluster, Redis replication
+- **Phase 3 (Enterprise)**: Kubernetes orchestration, per-tenant databases, Kafka/Redis clusters
 
 ---
 
@@ -797,12 +797,12 @@ The **Tenant Gateway** is the single entry point for all traffic, making it the 
 **Infrastructure (Cost-Optimized):**
 - **Single PostgreSQL instance** (instead of 12 tenant databases)
 - **Single Redis instance** (sessions + cache)
-- **No Kafka** (direct service-to-service calls for MVP)
-- **No CDN** (single region deployment)
+- **Kafka single-node** (Redpanda for event-driven architecture)
+- **No CDN** (single region deployment for MVP)
 - **Docker Compose** deployment (instead of Kubernetes)
 
-**Monthly Infrastructure Cost:** ~$30-50
-- VPS/Cloud Server: $20-30
+**Monthly Infrastructure Cost:** ~$50-75
+- VPS/Cloud Server: $30-50 (needs more resources for Kafka)
 - Domain + SSL: $10
 - Monitoring (Free tier): $0
 
@@ -815,7 +815,6 @@ The **Tenant Gateway** is the single entry point for all traffic, making it the 
 - Domains Service - Custom domains (enterprise feature)
 - Experiments Service - A/B testing (requires traffic first)
 - Advanced Analytics - Mixpanel integration (free tier sufficient)
-- Kafka Event Bus - Direct calls work for low traffic MVP
 - Cloudflare CDN - Single region handles initial users
 
 ### MVP Feature Set
@@ -865,7 +864,7 @@ The **Tenant Gateway** is the single entry point for all traffic, making it the 
 - 🔄 **Email Service** - Automated campaigns, drip sequences
 - 🔄 **Integrations Service** - Zapier, webhooks, Google Sheets
 - 🔄 **Domains Service** - Custom branded domains (go.acme.com)
-- 🔄 **Kafka Event Bus** - Decouple services for scale
+- 🔄 **Kafka 3-node cluster** - Scale from single-node to distributed cluster
 - 🔄 **Cloudflare CDN** - Global edge caching
 
 **New Features:**
@@ -918,10 +917,10 @@ The **Tenant Gateway** is the single entry point for all traffic, making it the 
 | **Servers** | 1 VPS | 3-5 VPS | Kubernetes cluster |
 | **Database** | 1 PostgreSQL | 3 PostgreSQL (replicas) | 12 PostgreSQL (per-tenant) |
 | **Caching** | 1 Redis | 2 Redis (primary/replica) | Redis cluster |
-| **Events** | Direct calls | Kafka (3 brokers) | Kafka cluster |
+| **Events** | Kafka (single-node) | Kafka (3 brokers) | Kafka cluster |
 | **CDN** | None | Cloudflare (basic) | Cloudflare (enterprise) |
 | **Monitoring** | Free tier | Paid tier | Enterprise tier |
-| **Cost/Month** | $30-50 | $200-300 | $1,000+ |
+| **Cost/Month** | $50-75 | $200-300 | $1,000+ |
 
 ---
 
