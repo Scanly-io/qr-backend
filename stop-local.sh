@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "🛑 Stopping QR Backend Services..."
+echo "Stopping QR Backend Services..."
 
 # Kill all service processes
 pkill -f "auth-service"
@@ -11,4 +11,4 @@ pkill -f "microsite-service"
 # Stop Docker services
 docker compose down
 
-echo "✅ All services stopped"
+echo "All services stopped"
