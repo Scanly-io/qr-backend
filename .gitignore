@@ -37,6 +37,19 @@ coverage/
 !.env.docker
 .env.docker.local
 
+# API Keys & Secrets (extra protection)
+**/secrets/
+**/*.key
+**/*.pem
+**/*.p12
+**/*.pfx
+**/credentials.json
+**/service-account.json
+**/*-credentials.json
+**/*-key.json
+**/*token*.json
+**/*secret*.txt
+
 # OS / Editor
 .DS_Store
 .vscode/
