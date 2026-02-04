@@ -522,59 +522,25 @@ flowchart TB
 ✅ **Resilience** - User gets response even if analytics processing fails  
 ✅ **Cost Efficiency** - Redis reduces database load by 90%
 
-**Why This C4 Container Diagram Shows:**
+---
 
-**Service Isolation & Ownership:**
-- Each service owns its data - No shared databases (except in MVP where all PostgreSQL instances are in one DB)
-- Services communicate via well-defined APIs (REST) or events (Kafka)
-- Containers can scale independently based on load
+**Key Architecture Patterns:**
 
-**Technology Decisions Visible:**
-- **Runtime**: Node.js 20+ with Fastify framework for all web services
-- **Databases**: PostgreSQL for relational data, Redis for caching
-- **Storage**: Cloudflare R2 for static assets (S3-compatible)
-- **Messaging**: Kafka for event-driven architecture
-- **Edge**: Cloudflare CDN + Nginx for traffic management
-
-**Communication Patterns:**
-- **Synchronous (Solid arrows)**: REST API calls for real-time operations (QR creation, user queries)
-- **Asynchronous (Dotted arrows)**: Kafka events for background processing (analytics, notifications)
-- **Cache-First**: Redis checked before PostgreSQL for 100x performance improvement
-- **Event-Driven**: Services publish events without knowing who consumes them (loose coupling)
+- **Service Isolation** - Each service owns its data (separate databases in production)
+- **Cache-First** - Redis checked before PostgreSQL (100x performance improvement)
+- **Event-Driven** - Kafka enables loose coupling between services
+- **Async Processing** - Background workers decouple slow operations from user requests
+- **Multi-Tenant Ready** - Database-per-tenant design for enterprise isolation (Phase 3)
 
 **Deployment & Scaling:**
+
 - **Phase 1 (MVP)**: All containers run on single VPS, shared PostgreSQL/Redis instances
 - **Phase 2 (Growth)**: Services split across multiple VPS, Kafka cluster added
 - **Phase 3 (Enterprise)**: Kubernetes orchestration, per-tenant databases, Redis cluster
 
 ---
 
-### Why C4 Level 2 Matters for TPM Roles
-
-**This Container Diagram demonstrates:**
-- ✅ **Technology Selection** - Chose Node.js (team familiarity), PostgreSQL (ACID compliance), Redis (performance)
-- ✅ **Scalability Planning** - Each container can scale independently (horizontal scaling ready)
-- ✅ **Cost Awareness** - Designed for enterprise scale ($1000/month), deployed lean MVP ($50/month)
-- ✅ **Communication Strategy** - Async events for non-critical paths, sync APIs for user-facing operations
-- ✅ **Trade-off Analysis** - Single PostgreSQL in Phase 1 vs per-tenant DBs in Phase 3
-
-**What recruiters see:**
-- Clear understanding of modern tech stack (microservices, event-driven, caching)
-- Ability to communicate architecture to technical and non-technical stakeholders
-- Strategic thinking (phased deployment based on revenue triggers)
-
----
-
-**Service Boundaries Explained (for deeper context):**
-
-- **Each service owns its data** - No shared databases (except in MVP where all PostgreSQL instances are in one DB)
-- **Redis is duplicated for clarity** - Rate limiting (Gateway) vs application caching (QR/Analytics)
-- **R2 Storage is duplicated** - QR images vs Microsite media (separate buckets)
-- **Kafka enables loose coupling** - Services publish events without knowing who consumes them
-- **Hot metrics sync** - Redis stores real-time counters (page views, scan counts), Background Processors flush to PostgreSQL every 60 seconds
-- **QR ↔ Microsite integration** - When a QR code is scanned, QR Service queries Microsite Service to fetch the linked microsite page
-
-**Background Jobs (⚡ Kafka Consumers) - What They Do:**
+**Background Jobs (Kafka Consumers) - What They Do:**
 
 Background jobs are Node.js workers that consume events from Kafka and process them asynchronously. This architecture decouples slow operations from user-facing requests for faster response times.
 
