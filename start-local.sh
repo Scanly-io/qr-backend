@@ -9,7 +9,7 @@ echo "Starting Docker services (PostgreSQL, Redis, Kafka)..."
 docker compose up -d postgres redis redpanda nginx
 
 # Wait for databases
-echo "⏳ Waiting for PostgreSQL to be ready..."
+echo "Waiting for PostgreSQL to be ready..."
 sleep 3
 
 # Start all services in background
