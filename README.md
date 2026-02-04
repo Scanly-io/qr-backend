@@ -293,6 +293,28 @@ graph TB
 - **System → External Systems**: REST API (JSON over HTTPS), CDN edge delivery
 - **Interactions are simplified** - Details shown in Level 2 Container Diagram below
 
+**How It Works (Example Flow):**
+
+**Scenario: Business Owner Creates QR Code**
+1. **Business Owner** logs into web dashboard via HTTPS
+2. **QR & Microsite Platform** authenticates user and displays dashboard
+3. Owner creates new QR code with custom branding
+4. **System** generates QR code and stores in database
+5. **System** calls **Cloudflare CDN** to cache QR image globally
+6. **System** sends welcome email via **SendGrid**
+7. Owner shares QR code, customers scan it in physical locations
+8. **System** tracks analytics and calls **Mixpanel** for product metrics
+9. If errors occur, **System** reports to **Sentry**
+10. When owner upgrades, **System** processes payment via **Stripe**
+
+**Scenario: End Customer Scans QR Code**
+1. **End Customer** scans QR code with phone camera
+2. **QR & Microsite Platform** receives scan request via HTTPS
+3. **System** fetches microsite page from database
+4. **Cloudflare CDN** serves cached assets (images, CSS) from nearest edge location
+5. Customer views microsite instantly (< 100ms response time)
+6. **System** asynchronously tracks analytics (device, location, time)
+
 **Why This Matters for TPM Interviews:**
 
 ✅ **Business Context** - Shows you understand 4 distinct user personas (not just "users")  
@@ -419,6 +441,86 @@ flowchart TB
 **4. Edge Infrastructure**
 - **Cloudflare CDN** - Global edge caching and DDoS protection
 - **Nginx** - Reverse proxy and load balancer
+
+**How It Works (Request Flow Through Containers):**
+
+**Scenario: Creating a QR Code (Synchronous Flow)**
+
+1. **User** sends HTTPS request → **Cloudflare CDN**
+   - Request: `POST /api/qr/create` with QR code data
+
+2. **Cloudflare CDN** → **Nginx** → **API Gateway**
+   - CDN routes to origin server
+   - Nginx load balances to Gateway instance
+
+3. **API Gateway** checks **Rate Limiter (Redis)**
+   - Query: `GET rate_limit:user_123` → "45/100 requests in last minute"
+   - Result: ✅ Under limit, proceed
+
+4. **API Gateway** → **Auth Service**
+   - Validates JWT token
+   - **Auth Service** queries **User Store (PostgreSQL)**
+   - Returns user permissions: ✅ Authorized
+
+5. **API Gateway** → **QR Service**
+   - Forwards authenticated request with user context
+
+6. **QR Service** performs operations:
+   - **Checks QR Cache (Redis)** first for duplicates (5ms lookup)
+   - **Cache miss** → Generates new QR code
+   - **Writes to QR Store (PostgreSQL)** - Saves QR metadata (50ms)
+   - **Uploads image to R2 Storage** - Stores PNG/SVG file
+   - **Updates QR Cache (Redis)** - Caches for future lookups (TTL: 1 hour)
+
+7. **QR Service** publishes event (Async - Non-blocking):
+   - Event: `qr.created` → **Kafka Event Bus**
+   - User receives response immediately (total: ~150ms)
+
+8. **Background Workers** consume event (Happens in parallel):
+   - **Analytics Service** increments counters in **Metrics Cache**
+   - Tracks creation event in **Events Store (PostgreSQL)**
+   - Sends notification via external services
+
+**Scenario: Scanning a QR Code (Cache-First Pattern)**
+
+1. **User** scans QR code → Request hits **Cloudflare CDN**
+   - Request: `GET /qr/scan/abc123`
+
+2. **CDN** checks edge cache:
+   - ✅ **Cache HIT** → Returns QR image directly (< 20ms, no origin call)
+   - ❌ **Cache MISS** → Routes to **Nginx** → **API Gateway**
+
+3. **API Gateway** → **QR Service**
+   - Request: "Get QR code metadata for abc123"
+
+4. **QR Service** cache-first lookup:
+   - **Check QR Cache (Redis)** first → ✅ **HIT** (5ms)
+   - Returns metadata without database query
+   - *If cache miss, would query **QR Store (PostgreSQL)** (50ms)*
+
+5. **QR Service** → **Microsite Service**
+   - Request: "Get linked microsite page data"
+   - **Microsite Service** queries **Page Store (PostgreSQL)**
+
+6. **QR Service** publishes scan event (Async):
+   - Event: `qr.scanned` → **Kafka Event Bus**
+   - Includes: device, location, timestamp, referrer
+
+7. **User receives redirect** (total: ~50ms)
+   - Browser loads microsite
+   - **Cloudflare CDN** serves static assets (images, CSS)
+
+8. **Background Workers** process scan event (Parallel):
+   - **Analytics Service** updates **Metrics Cache (Redis)**
+   - Increments: `INCR scan_count:qr_abc123`
+   - Every 60 seconds, batch writes to **Events Store (PostgreSQL)**
+
+**Why This Flow Matters:**
+
+✅ **Performance** - Cache-first pattern achieves 100x speedup (5ms vs 500ms)  
+✅ **Scalability** - Async events decouple processing from user response  
+✅ **Resilience** - User gets response even if analytics processing fails  
+✅ **Cost Efficiency** - Redis reduces database load by 90%
 
 **Why This C4 Container Diagram Shows:**
 
