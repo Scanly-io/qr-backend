@@ -534,9 +534,9 @@ flowchart TB
 
 **Deployment & Scaling:**
 
-- **Phase 1 (MVP)**: Single VPS, shared PostgreSQL/Redis, Kafka single-node (Redpanda)
-- **Phase 2 (Growth)**: Multi-VPS deployment, Kafka 3-node cluster, Redis replication
-- **Phase 3 (Enterprise)**: Kubernetes orchestration, per-tenant databases, Kafka/Redis clusters
+- **Phase 1 (MVP)**: Single VPS, shared PostgreSQL/Redis, Kafka single-node, Cloudflare free tier
+- **Phase 2 (Growth)**: Multi-VPS, Kafka 3-node cluster, Redis replication, Cloudflare Pro
+- **Phase 3 (Enterprise)**: Kubernetes, per-tenant databases, Kafka/Redis clusters, Cloudflare Enterprise
 
 ---
 
@@ -798,13 +798,14 @@ The **Tenant Gateway** is the single entry point for all traffic, making it the 
 - **Single PostgreSQL instance** (instead of 12 tenant databases)
 - **Single Redis instance** (sessions + cache)
 - **Kafka single-node** (Redpanda for event-driven architecture)
-- **No CDN** (single region deployment for MVP)
+- **Cloudflare CDN** (free tier for caching and DDoS protection)
+- **Grafana + Prometheus** (free tier for monitoring and alerts)
 - **Docker Compose** deployment (instead of Kubernetes)
 
 **Monthly Infrastructure Cost:** ~$50-75
 - VPS/Cloud Server: $30-50 (needs more resources for Kafka)
 - Domain + SSL: $10
-- Monitoring (Free tier): $0
+- CDN & Monitoring: $0 (free tiers)
 
 ### What's NOT Deployed (Yet)
 
@@ -815,7 +816,6 @@ The **Tenant Gateway** is the single entry point for all traffic, making it the 
 - Domains Service - Custom domains (enterprise feature)
 - Experiments Service - A/B testing (requires traffic first)
 - Advanced Analytics - Mixpanel integration (free tier sufficient)
-- Cloudflare CDN - Single region handles initial users
 
 ### MVP Feature Set
 
@@ -865,7 +865,7 @@ The **Tenant Gateway** is the single entry point for all traffic, making it the 
 - 🔄 **Integrations Service** - Zapier, webhooks, Google Sheets
 - 🔄 **Domains Service** - Custom branded domains (go.acme.com)
 - 🔄 **Kafka 3-node cluster** - Scale from single-node to distributed cluster
-- 🔄 **Cloudflare CDN** - Global edge caching
+- 🔄 **Cloudflare Pro** - Advanced caching, load balancing, firewall rules
 
 **New Features:**
 - AI-powered microsite content generation
@@ -918,8 +918,8 @@ The **Tenant Gateway** is the single entry point for all traffic, making it the 
 | **Database** | 1 PostgreSQL | 3 PostgreSQL (replicas) | 12 PostgreSQL (per-tenant) |
 | **Caching** | 1 Redis | 2 Redis (primary/replica) | Redis cluster |
 | **Events** | Kafka (single-node) | Kafka (3 brokers) | Kafka cluster |
-| **CDN** | None | Cloudflare (basic) | Cloudflare (enterprise) |
-| **Monitoring** | Free tier | Paid tier | Enterprise tier |
+| **CDN** | Cloudflare (free) | Cloudflare Pro ($20/mo) | Cloudflare Enterprise |
+| **Monitoring** | Grafana (free tier) | Grafana Cloud ($50/mo) | Enterprise tier |
 | **Cost/Month** | $50-75 | $200-300 | $1,000+ |
 
 ---
