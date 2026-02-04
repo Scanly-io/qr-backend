@@ -312,90 +312,100 @@ graph TB
 
 ```mermaid
 flowchart TB
-    User[👤 User]
-    CDN[☁️ Cloudflare CDN]
-    Nginx[⚙️ Nginx]
+    User["User<br/>[Person]"]
+    CDN["Cloudflare CDN<br/>[Infrastructure]"]
+    Nginx["Nginx<br/>[Reverse Proxy]"]
     
-    subgraph gateway[" 🔐 GATEWAY "]
-        Gateway[API Gateway]
-        RateLimitRedis[(Rate Limit<br/>Redis)]
+    subgraph gateway["API Gateway [Container: Node.js]"]
+        Gateway["Gateway Service<br/>[Component]"]
+        RateLimitRedis[("Rate Limiter<br/>[Database: Redis]")]
     end
     
-    subgraph auth[" 🔑 AUTH SERVICE "]
-        AuthService[Auth Logic]
-        AuthDB[(Users DB<br/>PostgreSQL)]
+    subgraph auth["Auth Service [Container: Node.js]"]
+        AuthService["Authentication<br/>[Component]"]
+        AuthDB[("User Store<br/>[Database: PostgreSQL]")]
     end
     
-    subgraph qr[" 📱 QR SERVICE "]
-        QRService[QR Generator]
-        QRCache[(QR Cache<br/>Redis)]
-        QRDB[(QR Codes DB<br/>PostgreSQL)]
-        QRStorage[QR Images<br/>R2]
+    subgraph qr["QR Service [Container: Node.js]"]
+        QRService["QR Generator<br/>[Component]"]
+        QRCache[("QR Cache<br/>[Database: Redis]")]
+        QRDB[("QR Store<br/>[Database: PostgreSQL]")]
+        QRStorage["QR Images<br/>[Storage: R2]"]
     end
     
-    subgraph analytics[" 📊 ANALYTICS SERVICE "]
-        AnalyticsService[Analytics Engine]
-        AnalyticsCache[(Hot Metrics<br/>Redis)]
-        AnalyticsDB[(Scan Events DB<br/>PostgreSQL)]
+    subgraph analytics["Analytics Service [Container: Node.js]"]
+        AnalyticsService["Analytics Engine<br/>[Component]"]
+        AnalyticsCache[("Metrics Cache<br/>[Database: Redis]")]
+        AnalyticsDB[("Events Store<br/>[Database: PostgreSQL]")]
     end
     
-    subgraph microsite[" 🌐 MICROSITE SERVICE "]
-        MicrositeService[Page Builder]
-        MicrositeDB[(Pages DB<br/>PostgreSQL)]
-        MicrositeStorage[Media Files<br/>R2]
+    subgraph microsite["Microsite Service [Container: Node.js]"]
+        MicrositeService["Page Builder<br/>[Component]"]
+        MicrositeDB[("Page Store<br/>[Database: PostgreSQL]")]
+        MicrositeStorage["Media Files<br/>[Storage: R2]"]
     end
     
-    Kafka[📮 Kafka Events]
-    Consumers[⚡ Background Jobs]
+    Kafka["Event Bus<br/>[Message Queue: Kafka]"]
+    Consumers["Background Workers<br/>[Container: Node.js]"]
     
-    User <-->|HTTPS| CDN
-    CDN <-->|Route| Nginx
-    Nginx <-->|Proxy| Gateway
-    Gateway <-->|Check Limit| RateLimitRedis
+    User -->|"[HTTPS]"| CDN
+    CDN -->|"[HTTP]"| Nginx
+    Nginx -->|"[HTTP]"| Gateway
+    Gateway -->|"[Read/Write]"| RateLimitRedis
     
-    Gateway <-->|Verify JWT| AuthService
-    AuthService <-->|SQL Query| AuthDB
+    Gateway -->|"[REST/JSON]"| AuthService
+    AuthService -->|"[SQL]"| AuthDB
     
-    Gateway <-->|REST API| QRService
-    QRService <-->|Cache Get/Set| QRCache
-    QRService <-->|SQL Read/Write| QRDB
-    QRService <-->|Upload Image| QRStorage
-    QRService -.->|Publish Event| Kafka
+    Gateway -->|"[REST/JSON]"| QRService
+    QRService -->|"[Read/Write]"| QRCache
+    QRService -->|"[SQL]"| QRDB
+    QRService -->|"[Upload]"| QRStorage
+    QRService -.->|"[Async Event]"| Kafka
     
-    Gateway <-->|REST API| AnalyticsService
-    AnalyticsService <-->|INCR Counter| AnalyticsCache
-    AnalyticsService <-->|SQL Insert| AnalyticsDB
-    AnalyticsService -.->|Publish Event| Kafka
+    Gateway -->|"[REST/JSON]"| AnalyticsService
+    AnalyticsService -->|"[INCR/GET]"| AnalyticsCache
+    AnalyticsService -->|"[SQL]"| AnalyticsDB
+    AnalyticsService -.->|"[Async Event]"| Kafka
     
-    Gateway <-->|REST API| MicrositeService
-    MicrositeService <-->|SQL Read/Write| MicrositeDB
-    MicrositeService <-->|Upload File| MicrositeStorage
+    Gateway -->|"[REST/JSON]"| MicrositeService
+    MicrositeService -->|"[SQL]"| MicrositeDB
+    MicrositeService -->|"[Upload]"| MicrositeStorage
     
-    QRService <-->|Get Page Data| MicrositeService
+    QRService -->|"[REST/JSON]"| MicrositeService
     
-    Kafka -.->|Consume| Consumers
-    Consumers -->|Batch Write| AnalyticsDB
+    Kafka -.->|"[Subscribe]"| Consumers
+    Consumers -->|"[Batch SQL]"| AnalyticsDB
     
-    style User fill:#60a5fa,color:#fff
-    style Kafka fill:#f59e0b,color:#fff
-    style Consumers fill:#8b5cf6,color:#fff
+    %% C4 Model Standard Colors
+    classDef personStyle fill:#08427b,stroke:#052e56,stroke-width:2px,color:#ffffff
+    classDef containerStyle fill:#1168bd,stroke:#0b4884,stroke-width:2px,color:#ffffff
+    classDef databaseStyle fill:#438dd5,stroke:#2e6295,stroke-width:2px,color:#ffffff
+    classDef infrastructureStyle fill:#999999,stroke:#6b6b6b,stroke-width:2px,color:#ffffff
+    classDef messageStyle fill:#f59e0b,stroke:#d97706,stroke-width:2px,color:#ffffff
+    
+    class User personStyle
+    class Gateway,AuthService,QRService,AnalyticsService,MicrositeService,Consumers containerStyle
+    class RateLimitRedis,AuthDB,QRCache,QRDB,QRStorage,AnalyticsCache,AnalyticsDB,MicrositeDB,MicrositeStorage databaseStyle
+    class CDN,Nginx infrastructureStyle
+    class Kafka messageStyle
 ```
 
 **Legend:**
-- **Solid arrows (<-->)** = Synchronous request/response (HTTP/REST API)
-- **Dotted arrows (-.->)** = Asynchronous events (fire-and-forget)
-- **Cylinders [(DB)]** = Data storage (PostgreSQL, Redis, R2)
-- **Rectangles [Service]** = Processing logic
-- **Grouped boxes** = Service boundaries (owns its data)
+
+- **Solid arrows (→)** = Synchronous communication (HTTP/REST, SQL queries)
+- **Dotted arrows (-.->)** = Asynchronous communication (Kafka events)
+- **[Brackets]** = Technology/Protocol used
+- **Subgraphs** = Service boundaries (containers)
+- **Cylinders** = Data stores (databases, caches, storage)
 
 **Container Types in This Architecture:**
 
 **1. Web Applications (Node.js + Fastify)**
-- 🔐 **API Gateway** - Entry point, rate limiting, JWT validation (Port 3000)
-- 🔑 **Auth Service** - User authentication, session management (Port 3010)
-- 📱 **QR Service** - QR code generation and management (Port 3011)
-- 📊 **Analytics Service** - Metrics processing and reporting (Port 3012)
-- 🌐 **Microsite Service** - Landing page builder (Port 3013)
+- **API Gateway** - Entry point, rate limiting, JWT validation (Port 3000)
+- **Auth Service** - User authentication, session management (Port 3010)
+- **QR Service** - QR code generation and management (Port 3011)
+- **Analytics Service** - Metrics processing and reporting (Port 3012)
+- **Microsite Service** - Landing page builder (Port 3013)
 
 **2. Data Stores**
 - **PostgreSQL Databases** - Relational data (Users, QR Codes, Analytics, Pages)
@@ -403,12 +413,12 @@ flowchart TB
 - **Cloudflare R2** - Object storage (QR images, Media files)
 
 **3. Message Infrastructure**
-- 📮 **Kafka Event Bus** - Asynchronous event streaming (13 topics designed)
-- ⚡ **Background Jobs (Consumers)** - Event processors (Node.js workers)
+- **Kafka Event Bus** - Asynchronous event streaming (13 topics designed)
+- **Background Jobs (Consumers)** - Event processors (Node.js workers)
 
 **4. Edge Infrastructure**
-- ☁️ **Cloudflare CDN** - Global edge caching and DDoS protection
-- ⚙️ **Nginx** - Reverse proxy and load balancer
+- **Cloudflare CDN** - Global edge caching and DDoS protection
+- **Nginx** - Reverse proxy and load balancer
 
 **Why This C4 Container Diagram Shows:**
 
