@@ -11,7 +11,9 @@ RUN apk add --no-cache \
     jpeg-dev \
     pango-dev \
     giflib-dev \
-    pixman-dev
+    pixman-dev \
+    libc-dev \
+    pkgconfig
 
 # Copy root package files for workspace setup
 COPY package*.json ./

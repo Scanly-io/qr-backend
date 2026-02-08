@@ -1,0 +1,273 @@
+version: "3.9"
+
+# ========================================
+# PHASE 1 MVP - Docker Compose
+# ========================================
+# Services: Auth, Microsite, QR, Analytics, Stripe
+# Infrastructure: PostgreSQL, Redis, Nginx
+# External: Cloudinary (CDN), Ngrok (mobile testing)
+# ========================================
+
+services:
+  # ========================================
+  # DATABASE
+  # ========================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: qr_postgres_phase1
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: qr_platform
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - qr_network
+
+  # ========================================
+  # CACHE & SESSIONS
+  # ========================================
+  redis:
+    image: redis:7-alpine
+    container_name: qr_redis_phase1
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis123}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - qr_network
+
+  # ========================================
+  # BACKEND SERVICES
+  # ========================================
+  
+  # Auth Service - User authentication & authorization
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    container_name: qr_auth_phase1
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/qr_platform
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis123}@redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRY: ${JWT_EXPIRY:-7d}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - qr_network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Microsite Service - Create and manage microsites
+  microsite-service:
+    build:
+      context: .
+      dockerfile: services/microsite-service/Dockerfile
+    container_name: qr_microsite_phase1
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3002
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/qr_platform
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis123}@redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRY: ${JWT_EXPIRY:-7d}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - qr_network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # QR Service - Generate and manage QR codes
+  # NOTE: Temporarily disabled - canvas native dependency build issues
+  # TODO: Fix canvas build or switch to pure JS QR library
+  # qr-service:
+  #   build:
+  #     context: .
+  #     dockerfile: services/qr-service/Dockerfile
+  #   container_name: qr_qr_phase1
+  #   restart: unless-stopped
+  #   environment:
+  #     NODE_ENV: production
+  #     PORT: 3003
+  #     DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/qr_platform
+  #     REDIS_URL: redis://:${REDIS_PASSWORD:-redis123}@redis:6379
+  #     CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
+  #     CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
+  #     CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   networks:
+  #     - qr_network
+  #   healthcheck:
+  #     test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3003/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+
+  # Analytics Service - Track scans, visits, conversions
+  analytics-service:
+    build:
+      context: .
+      dockerfile: services/analytics-service/Dockerfile
+    container_name: qr_analytics_phase1
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3004
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/qr_platform
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis123}@redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRY: ${JWT_EXPIRY:-7d}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - qr_network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Stripe Service - Payment processing
+  # NOTE: Commented out for Phase 1 - no dedicated stripe service exists yet
+  # Stripe functionality can be integrated into microsite-service or auth-service
+  # stripe-service:
+  #   build:
+  #     context: .
+  #     dockerfile: services/stripe-service/Dockerfile
+  #   container_name: qr_stripe_phase1
+  #   restart: unless-stopped
+  #   environment:
+  #     NODE_ENV: production
+  #     PORT: 3005
+  #     DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/qr_platform
+  #     REDIS_URL: redis://:${REDIS_PASSWORD:-redis123}@redis:6379
+  #     STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+  #     STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY}
+  #     STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+  #     FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   networks:
+  #     - qr_network
+  #   healthcheck:
+  #     test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3005/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+
+  # ========================================
+  # API GATEWAY (Nginx)
+  # ========================================
+  nginx:
+    image: nginx:alpine
+    container_name: qr_nginx_phase1
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.phase1.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - auth-service
+      - microsite-service
+      # - qr-service  # Disabled temporarily - build issues
+      - analytics-service
+      # - stripe-service  # Commented out - doesn't exist yet
+      - frontend
+    networks:
+      - qr_network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ========================================
+  # FRONTEND
+  # ========================================
+  frontend:
+    build:
+      context: ../qr-frontend
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost}
+        VITE_STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY}
+    container_name: qr_frontend_phase1
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost}
+      VITE_STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY}
+    ports:
+      - "8080:80"
+    networks:
+      - qr_network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# ========================================
+# NETWORKS
+# ========================================
+networks:
+  qr_network:
+    driver: bridge
+    name: qr_network_phase1
+
+# ========================================
+# VOLUMES
+# ========================================
+volumes:
+  postgres_data:
+    name: qr_postgres_data_phase1
+  redis_data:
+    name: qr_redis_data_phase1

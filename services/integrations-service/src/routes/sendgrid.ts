@@ -2,7 +2,8 @@ import axios from 'axios';
 import { eq, and } from 'drizzle-orm';
 import { db } from '../db';
 import { integrations } from '../schema';
-import { publishEvent, TOPICS } from '../kafka';
+import { publishEvent } from '@qr/common';
+import { TOPICS } from '../topics';
 import { verifyJWT } from '@qr/common';
 
 export default async function sendgridRoute(server: any) {

@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { db } from '../db';
 import { webhooks } from '../schema';
-import { publishEvent, TOPICS } from '../kafka';
+import { publishEvent } from '@qr/common';
+import { TOPICS } from '../topics';
 import { verifyJWT } from '@qr/common';
 
 const createWebhookSchema = z.object({

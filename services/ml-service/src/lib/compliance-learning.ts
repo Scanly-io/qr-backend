@@ -1,7 +1,7 @@
 import { db } from '../db.js';
 import { sql, eq, desc } from 'drizzle-orm';
 import { mlModels, mlPredictions, complianceRules } from '../schema.js';
-import { logger } from '../logger.js';
+import { logger } from '@qr/common';
 import brain from 'brain.js';
 import axios from 'axios';
 import { JSDOM } from 'jsdom';

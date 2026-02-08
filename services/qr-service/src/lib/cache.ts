@@ -2,6 +2,7 @@
  * Redis Cache Layer for QR Service
  * 
  * Provides caching utilities to reduce database load for frequently accessed data.
+ * Uses @qr/common's getRedisClient for consistent Redis access across all services.
  * 
  * Cache Strategy:
  * - QR Code Lists: Cache for 5 minutes (frequently viewed, changes less often)
@@ -13,54 +14,14 @@
  * - Tenant-scoped keys ensure isolation
  */
 
-import Redis from 'ioredis';
-import { logger } from '@qr/common';
-
-// Singleton Redis client
-let redisClient: Redis | null = null;
+import { getRedisClient, logger } from '@qr/common';
+import type { RedisClientType } from 'redis';
 
 /**
- * Initialize Redis connection
+ * Get connected Redis client via @qr/common singleton
  */
-export function initializeRedis(): Redis {
-  if (redisClient) {
-    return redisClient;
-  }
-
-  const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-  
-  redisClient = new Redis(redisUrl, {
-    retryStrategy(times) {
-      const delay = Math.min(times * 50, 2000);
-      logger.warn(`Redis connection retry attempt ${times}, waiting ${delay}ms`);
-      return delay;
-    },
-    maxRetriesPerRequest: 3,
-  });
-
-  redisClient.on('connect', () => {
-    logger.info('✅ Redis connected successfully');
-  });
-
-  redisClient.on('error', (err) => {
-    logger.error({ err }, '❌ Redis connection error');
-  });
-
-  redisClient.on('close', () => {
-    logger.warn('⚠️  Redis connection closed');
-  });
-
-  return redisClient;
-}
-
-/**
- * Get Redis client (initializes if needed)
- */
-export function getRedis(): Redis {
-  if (!redisClient) {
-    return initializeRedis();
-  }
-  return redisClient;
+async function getRedis(): Promise<RedisClientType> {
+  return await getRedisClient() as RedisClientType;
 }
 
 /**
@@ -88,9 +49,8 @@ export const CacheKeys = {
  * Get cached data with JSON parsing
  */
 export async function getCache<T>(key: string): Promise<T | null> {
-  const redis = getRedis();
-  
   try {
+    const redis = await getRedis();
     const data = await redis.get(key);
     if (!data) {
       logger.debug({ key }, 'Cache miss');
@@ -100,7 +60,7 @@ export async function getCache<T>(key: string): Promise<T | null> {
     logger.debug({ key }, 'Cache hit');
     return JSON.parse(data) as T;
   } catch (error) {
-    logger.error({ error, key }, 'Error reading from cache');
+    logger.error({ err: error, key }, 'Error reading from cache');
     return null; // Fail open - don't break app if Redis fails
   }
 }
@@ -109,13 +69,12 @@ export async function getCache<T>(key: string): Promise<T | null> {
  * Set cached data with JSON serialization and TTL
  */
 export async function setCache(key: string, value: any, ttl: number): Promise<void> {
-  const redis = getRedis();
-  
   try {
-    await redis.setex(key, ttl, JSON.stringify(value));
+    const redis = await getRedis();
+    await redis.setEx(key, ttl, JSON.stringify(value));
     logger.debug({ key, ttl }, 'Cache set');
   } catch (error) {
-    logger.error({ error, key }, 'Error writing to cache');
+    logger.error({ err: error, key }, 'Error writing to cache');
     // Fail open - don't throw, just log
   }
 }
@@ -124,9 +83,9 @@ export async function setCache(key: string, value: any, ttl: number): Promise<vo
  * Delete cache key(s)
  */
 export async function deleteCache(pattern: string): Promise<void> {
-  const redis = getRedis();
-  
   try {
+    const redis = await getRedis();
+    
     // If it's a simple key (no wildcards), delete directly
     if (!pattern.includes('*')) {
       await redis.del(pattern);
@@ -137,11 +96,11 @@ export async function deleteCache(pattern: string): Promise<void> {
     // For wildcard patterns, scan and delete matching keys
     const keys = await redis.keys(pattern);
     if (keys.length > 0) {
-      await redis.del(...keys);
+      await redis.del(keys);
       logger.debug({ pattern, count: keys.length }, 'Cache invalidated (pattern)');
     }
   } catch (error) {
-    logger.error({ error, pattern }, 'Error deleting from cache');
+    logger.error({ err: error, pattern }, 'Error deleting from cache');
   }
 }
 
@@ -149,9 +108,8 @@ export async function deleteCache(pattern: string): Promise<void> {
  * Increment counter (for scan tracking)
  */
 export async function incrementCounter(key: string, ttl?: number): Promise<number> {
-  const redis = getRedis();
-  
   try {
+    const redis = await getRedis();
     const newValue = await redis.incr(key);
     
     // Set TTL if provided and this is the first increment
@@ -162,7 +120,7 @@ export async function incrementCounter(key: string, ttl?: number): Promise<numbe
     logger.debug({ key, value: newValue }, 'Counter incremented');
     return newValue;
   } catch (error) {
-    logger.error({ error, key }, 'Error incrementing counter');
+    logger.error({ err: error, key }, 'Error incrementing counter');
     return 0;
   }
 }
@@ -171,13 +129,12 @@ export async function incrementCounter(key: string, ttl?: number): Promise<numbe
  * Get counter value
  */
 export async function getCounter(key: string): Promise<number> {
-  const redis = getRedis();
-  
   try {
+    const redis = await getRedis();
     const value = await redis.get(key);
     return value ? parseInt(value, 10) : 0;
   } catch (error) {
-    logger.error({ error, key }, 'Error reading counter');
+    logger.error({ err: error, key }, 'Error reading counter');
     return 0;
   }
 }
@@ -188,15 +145,4 @@ export async function getCounter(key: string): Promise<number> {
 export async function invalidateTenantCache(tenantId: string): Promise<void> {
   await deleteCache(`qr-service:*:${tenantId}*`);
   logger.info({ tenantId }, 'Invalidated all cache for tenant');
-}
-
-/**
- * Close Redis connection (for graceful shutdown)
- */
-export async function closeRedis(): Promise<void> {
-  if (redisClient) {
-    await redisClient.quit();
-    redisClient = null;
-    logger.info('Redis connection closed');
-  }
 }

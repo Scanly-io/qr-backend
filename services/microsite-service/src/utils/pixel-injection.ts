@@ -19,6 +19,8 @@
  * - Works with all major ad platforms
  */
 
+import { logger } from "@qr/common";
+
 interface Pixel {
   id: string;
   platform: string;
@@ -227,8 +229,8 @@ export async function logPixelFire(
     };
 
     // TODO: Send to Kafka analytics.events topic
-    console.log('Pixel fired:', event);
+    logger.info({ pixelId, qrId, eventType }, "Pixel fired");
   } catch (error) {
-    console.error('Error logging pixel fire:', error);
+    logger.error({ err: error }, "Error logging pixel fire");
   }
 }

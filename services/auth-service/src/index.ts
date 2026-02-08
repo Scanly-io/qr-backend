@@ -1,6 +1,4 @@
-import dotenv from "dotenv";
-// Load environment variables BEFORE importing anything from @qr/common
-dotenv.config();
+import "dotenv/config";
 
 import { buildServer, logger } from "@qr/common";
 import loginRoutes from "./routes/login.js";  
@@ -70,7 +68,7 @@ await app.register(fastifySwaggerUi, {
 
 // Only start server if this file is run directly (not imported for tests)
 if (import.meta.url === `file://${process.argv[1]}`) {
-  console.log("starting auth-service...");
+  logger.info("starting auth-service...");
   process.env.SERVICE_NAME = "auth-service";
   const port = Number(process.env.PORT || 3001);
   
@@ -80,8 +78,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     })
     .then((port) => logger.info(`Auth service running on :${port} <- auth-service`))
     .catch((err) => {
-      console.error("Failed to start server:", err);
-      logger.error("Failed to start server", err);
+      logger.error({ err }, "Failed to start server");
       process.exit(1);
     });
 }   

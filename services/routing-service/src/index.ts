@@ -1,8 +1,7 @@
 import 'dotenv/config';
-import { buildServer, logger } from '@qr/common';
+import { buildServer, logger, createConsumer, publishEvent, subscribeToEvents } from '@qr/common';
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUI from '@fastify/swagger-ui';
-import { initKafka, subscribeToEvents, publishEvent } from './kafka.js';
 import { db } from './db.js';
 import { linkSchedules, geoFences } from './schema.js';
 import { eq } from 'drizzle-orm';
@@ -139,10 +138,10 @@ const eventHandlers = {
 async function start() {
   try {
     logger.info('Initializing Kafka...');
-    await initKafka();
+    const consumer = await createConsumer('routing-service-group');
     
     logger.info('Subscribing to events...');
-    await subscribeToEvents(['qr.deleted', 'user.deleted', 'qr.scanned'], eventHandlers);
+    await subscribeToEvents(consumer, ['qr.deleted', 'user.deleted', 'qr.scanned'], eventHandlers);
     
     logger.info('Building HTTP server...');
     const app = await buildApp();

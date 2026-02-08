@@ -3,7 +3,7 @@ import { db } from '../db';
 import { appointments } from '../schema';
 import { eq, and, gte, lte, desc } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
-import { publishToKafka } from '../kafka';
+import { publishEvent } from '@qr/common';
 
 const router = Router();
 
@@ -82,7 +82,7 @@ router.post('/', async (req, res) => {
     }).returning();
 
     // Publish event to Kafka for email notifications
-    await publishToKafka('appointment.booked', {
+    await publishEvent('appointment.booked', {
       appointmentId: appointment.id,
       creatorId,
       micrositeId,
@@ -210,7 +210,7 @@ router.patch('/:id/cancel', async (req, res) => {
     }
 
     // Publish cancellation event
-    await publishToKafka('appointment.canceled', {
+    await publishEvent('appointment.canceled', {
       appointmentId: updatedAppointment.id,
       creatorId: updatedAppointment.creatorId,
       customerEmail: updatedAppointment.customerEmail,
@@ -293,7 +293,7 @@ router.patch('/:id/reschedule', async (req, res) => {
       .returning();
 
     // Publish rescheduled event
-    await publishToKafka('appointment.rescheduled', {
+    await publishEvent('appointment.rescheduled', {
       appointmentId: updatedAppointment.id,
       creatorId: updatedAppointment.creatorId,
       customerEmail: updatedAppointment.customerEmail,

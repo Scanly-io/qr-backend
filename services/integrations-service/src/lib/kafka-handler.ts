@@ -1,8 +1,9 @@
-import { consumer, TOPICS } from '../kafka';
+import { createConsumer, logger } from '@qr/common';
+import { TOPICS } from '../topics';
 import { triggerWebhooks } from './webhook-executor';
 
 export async function handleKafkaMessages() {
-  await consumer.connect();
+  const consumer = await createConsumer('integrations-service-group');
   
   // Subscribe to all events that might trigger webhooks
   await consumer.subscribe({
@@ -23,7 +24,7 @@ export async function handleKafkaMessages() {
         await triggerWebhooks(topic, data);
         
       } catch (error) {
-        console.error('Kafka message processing error:', error);
+        logger.error({ err: error }, 'Kafka message processing error');
       }
     },
   });

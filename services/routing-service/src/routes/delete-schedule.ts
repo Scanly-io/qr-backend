@@ -2,7 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { db } from '../db.js';
 import { linkSchedules } from '../schema.js';
 import { eq, and } from 'drizzle-orm';
-import { publishEvent } from '../kafka.js';
+import { publishEvent } from '@qr/common';
 
 /**
  * DELETE /schedules/:id

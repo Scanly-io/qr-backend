@@ -2,7 +2,8 @@ import { FastifyPluginAsync } from 'fastify';
 import { db } from '../db';
 import { experiments } from '../schema';
 import { eq, and } from 'drizzle-orm';
-import { publishEvent, TOPICS } from '../kafka';
+import { publishEvent } from '@qr/common';
+import { TOPICS } from '../topics';
 
 export const pauseExperimentRoute: FastifyPluginAsync = async (server) => {
   server.post<{ Params: { id: string } }>('/experiments/:id/pause', async (request, reply) => {

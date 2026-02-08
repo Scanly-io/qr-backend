@@ -42,7 +42,7 @@
  * - Support for conditional redirects (e.g., different URLs by device/location)
  */
 
-import { createProducer } from "@qr/common";
+import { createProducer, logger } from "@qr/common";
 import { db } from "../db.js";
 import { microsites } from "../schema.js";
 import { eq } from "drizzle-orm";
@@ -139,7 +139,7 @@ export default async function clickRoutes(app: FastifyInstance) {
     }).catch((err: Error) => {
       // Log Kafka errors but don't fail the redirect
       // User experience is more important than losing one analytics event
-      console.error("Failed to send button click event to Kafka:", err);
+      logger.error({ err }, "Failed to send button click event to Kafka");
     });
 
     // STEP 3: REDIRECT USER TO DESTINATION

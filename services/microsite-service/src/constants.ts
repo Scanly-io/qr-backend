@@ -10,4 +10,4 @@
  * - Bug fixes in HTML generation
  * - Responsive design improvements
  */
-export const CACHE_VERSION = "v1";
+export const CACHE_VERSION = "v2";

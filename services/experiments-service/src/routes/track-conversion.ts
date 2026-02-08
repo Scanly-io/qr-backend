@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { db } from '../db';
 import { variantAssignments, experimentVariants } from '../schema';
 import { eq, and } from 'drizzle-orm';
-import { publishEvent, TOPICS } from '../kafka';
+import { publishEvent } from '@qr/common';
+import { TOPICS } from '../topics';
 
 const trackConversionSchema = z.object({
   sessionId: z.string().min(1),

@@ -329,4 +329,102 @@ export async function createConsumer(groupId: string): Promise<Consumer> {
   return ok ? consumer : noopConsumer;
 }
 
+// ---------------------------------------------------------------------
+// CONVENIENCE HELPER: publishEvent
+// ---------------------------------------------------------------------
 
+/**
+ * Shared producer singleton for publishEvent helper.
+ * Lazily initialized on first call.
+ */
+let sharedProducer: Producer | null = null;
+
+/**
+ * Publish an event to a Kafka topic (convenience wrapper).
+ *
+ * This replaces the per-service publishEvent helpers that were duplicated
+ * across 7+ services. It lazily creates a shared producer on first call.
+ *
+ * USAGE:
+ *   import { publishEvent } from "@qr/common";
+ *   await publishEvent("analytics.events", { eventType: "button.clicked", qrId: "123" });
+ *
+ * @param topic  - Kafka topic name (e.g. "qr.events", "analytics.events")
+ * @param event  - Event payload (will be JSON-serialized with timestamp + service name)
+ */
+export async function publishEvent(topic: string, event: any): Promise<void> {
+  if (!sharedProducer) {
+    sharedProducer = await createProducer();
+  }
+
+  try {
+    await sharedProducer.send({
+      topic,
+      messages: [
+        {
+          key: event.id || event.qrId || null,
+          value: JSON.stringify({
+            ...event,
+            timestamp: event.timestamp || new Date().toISOString(),
+            service: process.env.SERVICE_NAME,
+          }),
+        },
+      ],
+    });
+    logger.info({ topic, eventType: event.eventType }, "Event published");
+  } catch (error) {
+    logger.error({ err: error, topic, eventType: event.eventType }, "Failed to publish event");
+    throw error;
+  }
+}
+
+// ---------------------------------------------------------------------
+// CONVENIENCE HELPER: subscribeToEvents
+// ---------------------------------------------------------------------
+
+/**
+ * Subscribe a consumer to multiple Kafka topics with handler routing.
+ *
+ * Replaces the per-service subscribeToEvents helpers that were duplicated
+ * across domains-service, pixels-service, routing-service, etc.
+ *
+ * USAGE:
+ *   import { createConsumer, subscribeToEvents } from "@qr/common";
+ *   const consumer = await createConsumer("my-group");
+ *   await subscribeToEvents(consumer, ["topic.a", "topic.b"], {
+ *     "topic.a": async (event) => { ... },
+ *     "topic.b": async (event) => { ... },
+ *   });
+ *
+ * @param consumer - KafkaJS Consumer instance (from createConsumer)
+ * @param topics   - Array of topic names to subscribe to
+ * @param handlers - Map of topic name → handler function
+ */
+export async function subscribeToEvents(
+  consumer: Consumer,
+  topics: string[],
+  handlers: Record<string, (event: any) => Promise<void>>
+): Promise<void> {
+  for (const topic of topics) {
+    await consumer.subscribe({ topic, fromBeginning: false });
+    logger.info({ topic }, "Subscribed to topic");
+  }
+
+  await consumer.run({
+    eachMessage: async ({ topic, message }) => {
+      try {
+        const event = JSON.parse(message.value?.toString() || "{}");
+        logger.info({ topic, eventType: event.eventType }, "Event received");
+
+        const handler = handlers[topic];
+        if (handler) {
+          await handler(event);
+        } else {
+          logger.warn({ topic }, "No handler found for topic");
+        }
+      } catch (error) {
+        logger.error({ err: error, topic }, "Failed to handle event");
+      }
+    },
+  });
+}

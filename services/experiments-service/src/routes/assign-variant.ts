@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { db } from '../db';
 import { experiments, experimentVariants, variantAssignments } from '../schema';
 import { eq, and } from 'drizzle-orm';
-import { publishEvent, TOPICS } from '../kafka';
+import { publishEvent } from '@qr/common';
+import { TOPICS } from '../topics';
 import crypto from 'crypto';
 
 const assignVariantSchema = z.object({

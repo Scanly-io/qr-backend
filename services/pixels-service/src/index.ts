@@ -1,8 +1,7 @@
 import 'dotenv/config';
-import { buildServer, logger } from '@qr/common';
+import { buildServer, logger, createConsumer, publishEvent, subscribeToEvents } from '@qr/common';
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUI from '@fastify/swagger-ui';
-import { initKafka, subscribeToEvents, publishEvent } from './kafka.js';
 import { db } from './db.js';
 import { retargetingPixels } from './schema.js';
 import { eq } from 'drizzle-orm';
@@ -149,13 +148,13 @@ const eventHandlers = {
  */
 async function start() {
   try {
-    // Initialize Kafka
+    // Initialize Kafka consumer and subscribe to events
     logger.info('Initializing Kafka...');
-    await initKafka();
+    const consumer = await createConsumer('pixels-service-group');
     
     // Subscribe to events from other services
     logger.info('Subscribing to events...');
-    await subscribeToEvents(['qr.deleted', 'user.deleted', 'microsite.viewed'], eventHandlers);
+    await subscribeToEvents(consumer, ['qr.deleted', 'user.deleted', 'microsite.viewed'], eventHandlers);
     
     // Build and start HTTP server
     logger.info('Building HTTP server...');

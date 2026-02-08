@@ -1,5 +1,5 @@
 import { db, users } from "../db.js";
-import { generateAccessToken, generateRefreshToken } from "@qr/common";
+import { generateAccessToken, generateRefreshToken, withDLQ } from "@qr/common";
 import argon2 from "argon2";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -63,15 +63,22 @@ export default async function loginRoutes(app: any) {
 
     const { email, password } = parsed.data;
 
-    const user = await db.query.users.findFirst({
-      where: eq(users.email, email)
-    });
+    const userResult = await withDLQ(
+      () => db.query.users.findFirst({ where: eq(users.email, email) }),
+      { service: "auth", operation: "user.login.lookup", metadata: { email } }
+    );
+
+    if (!userResult.success) {
+      return reply.code(500).send({ error: "Login failed" });
+    }
+
+    const user = userResult.data;
 
     if (!user) {
       return reply.code(401).send({ error: "Invalid credentials" });
     }
 
-  const valid = await argon2.verify(user.passwordHash, password);
+    const valid = await argon2.verify(user.passwordHash, password);
     if (!valid) {
       return reply.code(401).send({ error: "Invalid credentials" });
     }

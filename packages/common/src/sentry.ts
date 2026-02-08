@@ -1,5 +1,6 @@
 import * as Sentry from '@sentry/node';
-import { ProfilingIntegration } from '@sentry/profiling-node';
+// Temporarily disabled - ProfilingIntegration export issue in @sentry/profiling-node
+// import { ProfilingIntegration } from '@sentry/profiling-node';
 
 /**
  * Initialize Sentry for backend services
@@ -26,9 +27,9 @@ export function initializeSentry(serviceName: string, dsn?: string): void {
     tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
     profilesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
     
-    // Enable profiling
+    // Enable profiling (disabled temporarily - ProfilingIntegration export issue)
     integrations: [
-      new ProfilingIntegration(),
+      // new ProfilingIntegration(),
     ],
     
     // Filter out noise

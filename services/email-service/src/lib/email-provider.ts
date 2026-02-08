@@ -2,7 +2,8 @@ import sgMail from '@sendgrid/mail';
 import nodemailer from 'nodemailer';
 import { db } from '../db';
 import { emailLogs } from '../schema';
-import { publishEvent, TOPICS } from '../kafka';
+import { publishEvent } from '@qr/common';
+import { TOPICS } from '../topics';
 
 /**
  * EMAIL PROVIDER

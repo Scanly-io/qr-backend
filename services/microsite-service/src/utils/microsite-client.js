@@ -672,6 +672,134 @@
   }
 
   // ═══════════════════════════════════════════════════════════
+  // SCROLL-TRIGGERED ENTRANCE ANIMATIONS
+  // ═══════════════════════════════════════════════════════════
+
+  /**
+   * Initialize IntersectionObserver-based entrance animations
+   * Elements with class 'animate-on-scroll' will fade/slide in when they enter viewport
+   */
+  function initScrollAnimations() {
+    var elements = document.querySelectorAll('.animate-on-scroll');
+    if (!elements.length) return;
+
+    // Check for reduced motion preference
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      elements.forEach(function(el) {
+        el.classList.add('is-visible');
+      });
+      return;
+    }
+
+    if ('IntersectionObserver' in window) {
+      var observer = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible');
+            observer.unobserve(entry.target);
+          }
+        });
+      }, {
+        threshold: 0.1,
+        rootMargin: '0px 0px -40px 0px'
+      });
+
+      elements.forEach(function(el) {
+        observer.observe(el);
+      });
+    } else {
+      // Fallback: show everything immediately
+      elements.forEach(function(el) {
+        el.classList.add('is-visible');
+      });
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // PARALLAX BACKGROUND (lightweight)
+  // ═══════════════════════════════════════════════════════════
+
+  /**
+   * Lightweight parallax for hero background images
+   */
+  function initParallax() {
+    var heroBlocks = document.querySelectorAll('.hero-block');
+    if (!heroBlocks.length) return;
+
+    // Check for reduced motion
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    var ticking = false;
+
+    function onScroll() {
+      if (!ticking) {
+        window.requestAnimationFrame(function() {
+          heroBlocks.forEach(function(hero) {
+            var rect = hero.getBoundingClientRect();
+            if (rect.bottom > 0 && rect.top < window.innerHeight) {
+              var bg = hero.querySelector('.hero-parallax-bg');
+              if (bg) {
+                var scrolled = rect.top / window.innerHeight;
+                bg.style.transform = 'translateY(' + (scrolled * 30) + 'px) scale(1.1)';
+              }
+            }
+          });
+          ticking = false;
+        });
+        ticking = true;
+      }
+    }
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // MENU CATEGORY TABS
+  // ═══════════════════════════════════════════════════════════
+
+  function initMenuTabs() {
+    var tabContainers = document.querySelectorAll('[data-menu-tabs]');
+    tabContainers.forEach(function(container) {
+      var tabs = container.querySelectorAll('[data-tab-index]');
+      var parent = container.parentElement;
+      if (!parent) return;
+      var contents = parent.querySelectorAll('[data-tab-content]');
+      
+      tabs.forEach(function(tab) {
+        tab.addEventListener('click', function() {
+          var idx = tab.getAttribute('data-tab-index');
+          var primaryColor = tab.style.color; // grab from first inactive or use fallback
+          
+          // Find the primary color from the active tab
+          var activeTab = container.querySelector('.menu-category-tab[style*="color: #fff"], .menu-category-tab[style*="color: rgb(255"]');
+          var accentColor = activeTab ? activeTab.style.backgroundColor : '#6366f1';
+
+          // Deactivate all
+          tabs.forEach(function(t) {
+            t.style.backgroundColor = accentColor + '10';
+            t.style.color = accentColor;
+            var count = t.querySelector('.tab-count');
+            if (count) count.style.backgroundColor = accentColor + '20';
+          });
+
+          // Activate clicked
+          tab.style.backgroundColor = accentColor;
+          tab.style.color = '#ffffff';
+          var count = tab.querySelector('.tab-count');
+          if (count) count.style.backgroundColor = 'rgba(255,255,255,0.2)';
+
+          // Toggle content panels
+          contents.forEach(function(c) {
+            c.classList.remove('active');
+          });
+          var target = parent.querySelector('[data-tab-content="' + idx + '"]');
+          if (target) target.classList.add('active');
+        });
+      });
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════
   // INITIALIZATION
   // ═══════════════════════════════════════════════════════════
   
@@ -688,6 +816,9 @@
         initCountUpAnimations();
         initPricingToggles();
         initForms();
+        initScrollAnimations();
+        initParallax();
+        initMenuTabs();
       });
     } else {
       // DOM already loaded
@@ -698,6 +829,9 @@
       initCountUpAnimations();
       initPricingToggles();
       initForms();
+      initScrollAnimations();
+      initParallax();
+      initMenuTabs();
     }
   }
   

@@ -2,6 +2,7 @@ import { db, users } from "../db.js";
 import argon2 from "argon2";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { withDLQ } from "@qr/common";
 
 const schema = z.object({
   email: z.string().email(),
@@ -55,20 +56,30 @@ export default async function signupRoutes(app: any) {
 
     const { email, password } = parsed.data;
 
-    const exists = await db.query.users.findFirst({
-      where: eq(users.email, email)
-    });
+    const existsResult = await withDLQ(
+      () => db.query.users.findFirst({ where: eq(users.email, email) }),
+      { service: "auth", operation: "user.signup.check", metadata: { email } }
+    );
 
-    if (exists) {
+    if (!existsResult.success) {
+      return reply.code(500).send({ error: "Signup failed" });
+    }
+
+    if (existsResult.data) {
       return reply.code(409).send({ error: "Email already exists" });
     }
 
-  const passwordHash = await argon2.hash(password);
+    const passwordHash = await argon2.hash(password);
 
-    const [user] = await db.insert(users)
-      .values({ email, passwordHash })
-      .returning({ id: users.id, email: users.email });
+    const insertResult = await withDLQ(
+      () => db.insert(users).values({ email, passwordHash }).returning({ id: users.id, email: users.email }),
+      { service: "auth", operation: "user.signup.create", metadata: { email } }
+    );
 
-    reply.code(201).send(user);
+    if (!insertResult.success) {
+      return reply.code(500).send({ error: "Signup failed" });
+    }
+
+    reply.code(201).send(insertResult.data[0]);
   });
 }

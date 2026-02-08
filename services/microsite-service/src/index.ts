@@ -71,7 +71,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     
     app.listen({ port, host: '0.0.0.0' })
       .then(() => logger.info(`Microsite service running on :${port}`))
-      .catch((err) => { console.error("Failed to start server", err?.stack || err); logger.error("Failed to start server", err); process.exit(1); });
+      .catch((err) => { logger.error({ err }, "Failed to start server"); process.exit(1); });
 
     async function createConsumerInstance() {
       try {

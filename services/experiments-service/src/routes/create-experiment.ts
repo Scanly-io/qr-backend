@@ -2,7 +2,8 @@ import { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { db } from '../db';
 import { experiments, experimentVariants } from '../schema';
-import { publishEvent, TOPICS } from '../kafka';
+import { publishEvent } from '@qr/common';
+import { TOPICS } from '../topics';
 
 const createExperimentSchema = z.object({
   name: z.string().min(1).max(255),

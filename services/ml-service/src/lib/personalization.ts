@@ -1,6 +1,7 @@
 import { db } from '../db.js';
 import { personalizedCtas, ctaInteractions } from '../schema.js';
-import { publishEvent, TOPICS } from '../kafka.js';
+import { publishEvent } from '@qr/common';
+import { TOPICS } from '../topics.js';
 import geoip from 'geoip-lite';
 import UAParser from 'ua-parser-js';
 import pino from 'pino';

@@ -3,7 +3,8 @@ import OpenAI from 'openai';
 import pino from 'pino';
 import { db } from '../db.js';
 import { accessibilityScans } from '../schema.js';
-import { publishEvent, TOPICS } from '../kafka.js';
+import { publishEvent } from '@qr/common';
+import { TOPICS } from '../topics.js';
 
 const logger = pino({ name: 'ml-service:accessibility' });
 

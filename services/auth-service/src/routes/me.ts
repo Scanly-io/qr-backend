@@ -1,4 +1,4 @@
-import { verifyJWT } from "@qr/common";
+import { verifyJWT, withDLQ } from "@qr/common";
 import { db, users } from "../db.js";
 import { eq } from "drizzle-orm";
 
@@ -42,19 +42,21 @@ export default async function meRoutes(app: any) {
     },
     preHandler: [verifyJWT], // Use the new JWT middleware
   }, async (req:any, reply: any) => {
-    try {
-      // The user is now attached to req.user by the verifyJWT middleware
-      const userId = req.user.id;
+    const userId = req.user.id;
 
-      const user = await db.query.users.findFirst({
-        where: eq(users.id, userId)
-      });
+    const result = await withDLQ(
+      () => db.query.users.findFirst({ where: eq(users.id, userId) }),
+      { service: "auth", operation: "user.me.lookup", metadata: { userId } }
+    );
 
-      if (!user) return reply.code(404).send({ error: "User not found" });
-
-      reply.send({ id: user.id, email: user.email });
-    } catch {
-      return reply.code(401).send({ error: "Invalid token" });
+    if (!result.success) {
+      return reply.code(500).send({ error: "Failed to fetch user" });
     }
+
+    if (!result.data) {
+      return reply.code(404).send({ error: "User not found" });
+    }
+
+    reply.send({ id: result.data.id, email: result.data.email });
   });
 }

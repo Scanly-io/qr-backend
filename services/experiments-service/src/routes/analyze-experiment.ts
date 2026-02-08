@@ -10,7 +10,8 @@ import {
   determineWinner,
   type VariantStats,
 } from '../lib/statistics';
-import { publishEvent, TOPICS } from '../kafka';
+import { publishEvent } from '@qr/common';
+import { TOPICS } from '../topics';
 
 /**
  * Analyze experiment and determine winner

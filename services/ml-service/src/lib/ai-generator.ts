@@ -2,7 +2,8 @@ import OpenAI from 'openai';
 import pino from 'pino';
 import { db } from '../db.js';
 import { aiGenerations } from '../schema.js';
-import { publishEvent, TOPICS } from '../kafka.js';
+import { publishEvent } from '@qr/common';
+import { TOPICS } from '../topics.js';
 import { extractBrandAesthetic } from './brand-analyzer.js';
 import { eq } from 'drizzle-orm';
 

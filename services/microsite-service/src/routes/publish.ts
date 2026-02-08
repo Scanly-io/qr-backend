@@ -2,9 +2,9 @@ import { db } from "../db.js";
 import { microsites } from "../schema.js";
 import { eq } from "drizzle-orm";
 import { getRedisClient, verifyJWT, withDLQ } from "@qr/common";
-import { micrositeCacheKey } from "../utils/cachedKeys.js";
+import { micrositeCacheKey, micrositeDataCacheKey } from "../utils/cachedKeys.js";
+import { CACHE_VERSION } from "../constants.js";
 import { renderMicrosite } from "../utils/render.js";
-export const CACHE_VERSION = "v2"; // Bump this number
 
 // Canonical publish route (cleaned of temporary debug logs)
 export default async function publishRoutes(app: any) {
@@ -99,12 +99,21 @@ export default async function publishRoutes(app: any) {
     const cacheResult = await withDLQ(
       async () => {
         const cache = await getRedisClient();
-        await cache.set(`${micrositeCacheKey(actualQrId)}:${CACHE_VERSION}`, html);
+        // Invalidate all cache keys (HTML, UUID, and JSON data), then set fresh HTML cache
+        const qrIdCacheKey = `${micrositeCacheKey(actualQrId)}:${CACHE_VERSION}`;
+        const uuidCacheKey = `microsite:id:${site.id}:${CACHE_VERSION}`;
+        const dataCacheKey = `${micrositeDataCacheKey(actualQrId)}:${CACHE_VERSION}`;
+        await cache.del(qrIdCacheKey);
+        await cache.del(uuidCacheKey);
+        await cache.del(dataCacheKey);
+        // Set fresh cache with new HTML
+        await cache.set(qrIdCacheKey, html);
+        await cache.set(uuidCacheKey, html);
       },
       {
         service: "microsite",
         operation: "microsite.cache",
-        metadata: { qrId: actualQrId },
+        metadata: { qrId: actualQrId, micrositeId: site.id },
       }
     );
 

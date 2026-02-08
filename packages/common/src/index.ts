@@ -119,6 +119,8 @@ const mq: any = (_mq as any).default && Object.keys((_mq as any).default).length
 
 export const createProducer = mq.createProducer;
 export const createConsumer = mq.createConsumer;
+export const publishEvent = mq.publishEvent;
+export const subscribeToEvents = mq.subscribeToEvents;
 
 // Re-export event schemas
 import * as _event from "./event";
@@ -148,3 +150,7 @@ export { authGuard } from "./authguard";
 // Re-export error handling with DLQ
 export { withDLQ, withDLQSync } from "./errorHandler";
 export type { DLQContext, Result } from "./errorHandler";
+
+// Re-export Swagger helper
+export { registerSwagger } from "./swagger";
+export type { SwaggerOptions } from "./swagger";

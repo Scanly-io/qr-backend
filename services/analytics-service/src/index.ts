@@ -36,7 +36,7 @@ import fastifySwagger from "@fastify/swagger";
 import fastifySwaggerUi from "@fastify/swagger-ui";
 import analyticsRoutes from "./routes/analytics.js";
 
-console.log("starting analytics-service...");   
+logger.info("starting analytics-service...");   
 process.env.SERVICE_NAME = "analytics-service";
 
 /**

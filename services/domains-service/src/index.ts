@@ -1,8 +1,7 @@
 import 'dotenv/config';
-import { buildServer, logger } from '@qr/common';
+import { buildServer, logger, createConsumer, publishEvent, subscribeToEvents } from '@qr/common';
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUI from '@fastify/swagger-ui';
-import { initKafka, subscribeToEvents, publishEvent } from './kafka.js';
 import { db } from './db.js';
 import { customDomains } from './schema.js';
 import { eq } from 'drizzle-orm';
@@ -174,13 +173,13 @@ async function handleQRDeleted(event: any) {
  */
 async function start() {
   try {
-    // Initialize Kafka
+    // Initialize Kafka consumer and subscribe to events
     logger.info('Initializing Kafka...');
-    await initKafka();
+    const consumer = await createConsumer('domains-service-group');
     
     // Subscribe to events from other services
     logger.info('Subscribing to events...');
-    await subscribeToEvents(['qr.created', 'qr.deleted', 'user.deleted'], eventHandlers);
+    await subscribeToEvents(consumer, ['qr.created', 'qr.deleted', 'user.deleted'], eventHandlers);
     
     // Build and start HTTP server
     logger.info('Building HTTP server...');

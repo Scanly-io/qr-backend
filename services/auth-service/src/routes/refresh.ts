@@ -1,5 +1,5 @@
 import { db, users } from "../db.js";
-import { generateAccessToken, verifyRefreshToken } from "@qr/common";
+import { generateAccessToken, verifyRefreshToken, withDLQ } from "@qr/common";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -52,25 +52,28 @@ export default async function refreshRoutes(app: any) {
 
     const { refreshToken } = parsed.data;
 
+    let decoded: any;
     try {
-      // Verify refresh token
-      const decoded = verifyRefreshToken(refreshToken);
-
-      // Fetch user from database to ensure they still exist
-      const user = await db.query.users.findFirst({
-        where: eq(users.id, decoded.id)
-      });
-
-      if (!user) {
-        return reply.code(401).send({ error: "User not found" });
-      }
-
-      // Generate new access token
-      const accessToken = generateAccessToken({ id: user.id, email: user.email });
-
-      reply.send({ accessToken });
-    } catch (err) {
+      decoded = verifyRefreshToken(refreshToken);
+    } catch {
       return reply.code(401).send({ error: "Invalid or expired refresh token" });
     }
+
+    const result = await withDLQ(
+      () => db.query.users.findFirst({ where: eq(users.id, decoded.id) }),
+      { service: "auth", operation: "user.refresh.lookup", metadata: { userId: decoded.id } }
+    );
+
+    if (!result.success) {
+      return reply.code(500).send({ error: "Token refresh failed" });
+    }
+
+    if (!result.data) {
+      return reply.code(401).send({ error: "User not found" });
+    }
+
+    const accessToken = generateAccessToken({ id: result.data.id, email: result.data.email });
+
+    reply.send({ accessToken });
   });
 }

@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { db } from '../db.js';
 import { retargetingPixels } from '../schema.js';
-import { publishEvent } from '../kafka.js';
+import { publishEvent } from '@qr/common';
 
 /**
  * POST /pixels

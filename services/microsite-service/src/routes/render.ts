@@ -4,9 +4,9 @@ import { microsites } from "../schema.js";
 // Drizzle ORM operator for WHERE clauses (like SQL WHERE qrId = 'abc')
 import { eq } from "drizzle-orm";
 // Shared utilities: Redis for caching HTML, Kafka for analytics events
-import { getRedisClient, createProducer } from "@qr/common";
+import { getRedisClient, createProducer, logger } from "@qr/common";
 // Helper function to generate consistent Redis cache keys
-import { micrositeCacheKey } from "../utils/cachedKeys.js";
+import { micrositeCacheKey, micrositeDataCacheKey } from "../utils/cachedKeys.js";
 // Library to parse User-Agent strings and detect device/browser/OS
 // Example: "Mozilla/5.0 (iPhone..." → { device: "mobile", os: "iOS", browser: "Safari" }
 import { UAParser } from "ua-parser-js";
@@ -46,11 +46,11 @@ async function getGeoReader(): Promise<ReaderModel | null> {
     try {
       const dbPath = path.join(process.cwd(), "GeoLite2-City.mmdb");
       geoReader = await Reader.open(dbPath);
-      console.log("✅ GeoIP2 database loaded successfully");
+      logger.info("GeoIP2 database loaded successfully");
     } catch (err) {
-      console.error("⚠️  GeoIP2 database not found. Geo-location will be unavailable.");
-      console.error("   Download from: https://dev.maxmind.com/geoip/geolite2-free-geolocation-data");
-      console.error("   Place GeoLite2-City.mmdb in:", process.cwd());
+      logger.warn("GeoIP2 database not found. Geo-location will be unavailable.");
+      logger.warn("Download from: https://dev.maxmind.com/geoip/geolite2-free-geolocation-data");
+      logger.warn({ cwd: process.cwd() }, "Place GeoLite2-City.mmdb in working directory");
       return null;
     }
   }
@@ -102,7 +102,7 @@ export default async function renderRoutes(app: any) {
    * @param {string} qrId - URL parameter (e.g., "menu-qr", "promo-123") or microsite UUID
    * @returns {HTML} - The microsite HTML page to display in browser
    */
-  app.get("/public/:qrId", async (req: any, res: any) => {
+  app.get("/public/:qrId", async (req: any, reply: any) => {
     // Extract qrId from URL (/public/menu-qr → qrId = "menu-qr")
     const { qrId } = req.params;
     
@@ -121,10 +121,10 @@ export default async function renderRoutes(app: any) {
       sendAnalytics(producerInstance, qrId, req);
       
       // Tell browser this was served from cache (useful for debugging)
-      res.header("X-Cache", "HIT");
+      reply.header("X-Cache", "HIT");
       
       // Return cached HTML immediately (super fast!)
-      return res.type("text/html").send(cached);
+      return reply.type("text/html").send(cached);
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -137,13 +137,14 @@ export default async function renderRoutes(app: any) {
       siteRows = await db.select().from(microsites).where(eq(microsites.qrId, qrId)).limit(1);
       
       // If not found, try by microsite id (UUID) as fallback
-      if (siteRows.length === 0) {
+      // Only attempt UUID lookup if qrId looks like a valid UUID
+      if (siteRows.length === 0 && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(qrId)) {
         siteRows = await db.select().from(microsites).where(eq(microsites.id, qrId)).limit(1);
       }
     } catch (err: any) {
       // Database error (connection lost, table doesn't exist, etc.)
       req.log?.error({ err, qrId }, "microsite DB fetch error");
-      return res.code(500).send("Microsite DB error");
+      return reply.code(500).send({ error: "Microsite DB error" });
     }
     
     const site = siteRows[0];  // Get first (and only) result
@@ -151,7 +152,7 @@ export default async function renderRoutes(app: any) {
     // Check if microsite exists and has been published
     // site.publishedHtml is set when admin clicks "Publish" button
     if (!site || !site.publishedHtml) {
-      return res.code(404).send("Microsite not published");
+      return reply.code(404).send({ error: "Microsite not published" });
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -168,10 +169,79 @@ export default async function renderRoutes(app: any) {
     await cacheInstance.set(cacheKey, site.publishedHtml);
     
     // Tell browser this was NOT from cache (first time serving this)
-    res.header("X-Cache", "MISS");
+    reply.header("X-Cache", "MISS");
     
     // Return HTML to user's browser
-    return res.type("text/html").send(site.publishedHtml);
+    return reply.type("text/html").send(site.publishedHtml);
+  });
+
+  /**
+   * GET /public/:qrId/data
+   * 
+   * Returns the microsite data as JSON (blocks, theme, metadata).
+   * Used by the React frontend to render the microsite with the same
+   * components as the editor preview — ensuring visual parity.
+   * 
+   * NO AUTH REQUIRED — this is public data.
+   * 
+   * @param {string} qrId - QR code ID or microsite UUID
+   * @returns {JSON} - { id, title, description, layout, theme, links, qrId }
+   */
+  app.get("/public/:qrId/data", async (req: any, reply: any) => {
+    const { qrId } = req.params;
+
+    // Check Redis cache for JSON data
+    const cacheInstance = await getCache();
+    const cacheKey = `${micrositeDataCacheKey(qrId)}:${CACHE_VERSION}`;
+    
+    const cached = await cacheInstance.get(cacheKey);
+    if (cached) {
+      const producerInstance = await getProducer();
+      sendAnalytics(producerInstance, qrId, req);
+      reply.header("X-Cache", "HIT");
+      return reply.type("application/json").send(cached);
+    }
+
+    // Load from database
+    let siteRows: any[] = [];
+    try {
+      siteRows = await db.select().from(microsites).where(eq(microsites.qrId, qrId)).limit(1);
+      if (siteRows.length === 0 && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(qrId)) {
+        siteRows = await db.select().from(microsites).where(eq(microsites.id, qrId)).limit(1);
+      }
+    } catch (err: any) {
+      req.log?.error({ err, qrId }, "microsite data fetch error");
+      return reply.code(500).send({ error: "Database error" });
+    }
+
+    const site = siteRows[0];
+    if (!site) {
+      return reply.code(404).send({ error: "Microsite not found" });
+    }
+
+    // Return the raw data the frontend needs to render
+    const data = {
+      id: site.id,
+      title: site.title || "",
+      description: site.description || "",
+      layout: site.layout || [],
+      theme: site.theme || {},
+      links: site.links || [],
+      qrId: site.qrId || qrId,
+      type: site.type || "link-in-bio",
+      publishedAt: site.publishedAt,
+    };
+
+    const json = JSON.stringify(data);
+
+    // Analytics
+    const producerInstance = await getProducer();
+    sendAnalytics(producerInstance, qrId, req);
+
+    // Cache for next request
+    await cacheInstance.set(cacheKey, json);
+    reply.header("X-Cache", "MISS");
+    return reply.type("application/json").send(json);
   });
 
   /**
@@ -183,22 +253,22 @@ export default async function renderRoutes(app: any) {
    * @param {string} micrositeId - UUID of the microsite
    * @returns {HTML} - The microsite HTML page to display in browser
    */
-  app.get("/m/:micrositeId", async (req: any, res: any) => {
+  app.get("/m/:micrositeId", async (req: any, reply: any) => {
     const { micrositeId } = req.params;
     
     const cacheInstance = await getCache();
     // Use micrositeId for cache key with version (different from QR scans)
     const cacheKey = `microsite:id:${micrositeId}:${CACHE_VERSION}`;
 
-    // Check cache first
+    // Check Redis cache first
     const cached = await cacheInstance.get(cacheKey);
     if (cached) {
       const producerInstance = await getProducer();
       // Track as direct share (not QR scan)
       sendDirectShareAnalytics(producerInstance, micrositeId, req);
       
-      res.header("X-Cache", "HIT");
-      return res.type("text/html").send(cached);
+      reply.header("X-Cache", "HIT");
+      return reply.type("text/html").send(cached);
     }
 
     // Load from database by micrositeId
@@ -207,13 +277,13 @@ export default async function renderRoutes(app: any) {
       siteRows = await db.select().from(microsites).where(eq(microsites.id, micrositeId)).limit(1);
     } catch (err: any) {
       req.log?.error({ err, micrositeId }, "microsite DB fetch error");
-      return res.code(500).send("Microsite DB error");
+      return reply.code(500).send({ error: "Microsite DB error" });
     }
     
     const site = siteRows[0];
     
     if (!site || !site.publishedHtml) {
-      return res.code(404).send("Microsite not published");
+      return reply.code(404).send({ error: "Microsite not published" });
     }
 
     // Send analytics for direct share
@@ -223,8 +293,8 @@ export default async function renderRoutes(app: any) {
     // Cache for future direct shares
     await cacheInstance.set(cacheKey, site.publishedHtml);
     
-    res.header("X-Cache", "MISS");
-    return res.type("text/html").send(site.publishedHtml);
+    reply.header("X-Cache", "MISS");
+    return reply.type("text/html").send(site.publishedHtml);
   });
 }
 

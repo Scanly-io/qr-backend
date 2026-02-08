@@ -2,7 +2,8 @@ import axios from 'axios';
 import { eq, and } from 'drizzle-orm';
 import { db } from '../db';
 import { integrations, oauthTokens, payments } from '../schema';
-import { publishEvent, TOPICS } from '../kafka';
+import { publishEvent } from '@qr/common';
+import { TOPICS } from '../topics';
 import { verifyJWT } from '@qr/common';
 
 /**

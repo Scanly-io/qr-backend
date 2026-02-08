@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { db } from '../db.js';
 import { subdomains } from '../schema.js';
 import { eq } from 'drizzle-orm';
-import { publishEvent } from '../kafka.js';
+import { publishEvent } from '@qr/common';
 
 /**
  * PATCH /subdomains/me

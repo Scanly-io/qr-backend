@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { db } from '../db.js';
 import { subdomains, subdomainRoutes } from '../schema.js';
 import { eq, and } from 'drizzle-orm';
-import { publishEvent } from '../kafka.js';
+import { publishEvent } from '@qr/common';
 
 /**
  * POST /subdomains/routes

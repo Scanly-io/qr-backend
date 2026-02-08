@@ -1,5 +1,5 @@
 import { EachMessagePayload } from 'kafkajs';
-import { TOPICS } from '../kafka';
+import { TOPICS } from '../topics';
 
 /**
  * Handle incoming Kafka messages

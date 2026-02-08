@@ -1,4 +1,5 @@
-import { consumer, TOPICS } from '../kafka';
+import { createConsumer } from '@qr/common';
+import { TOPICS } from '../topics';
 import { sendEmail } from './email-provider';
 import { db } from '../db';
 import { emailAutomations, emailSubscribers } from '../schema';
@@ -17,7 +18,7 @@ import { renderTemplate } from './template-engine';
  */
 
 export async function handleKafkaMessages() {
-  await consumer.connect();
+  const consumer = await createConsumer('email-service-group');
   
   await consumer.subscribe({
     topics: [

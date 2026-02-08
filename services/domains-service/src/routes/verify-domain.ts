@@ -4,7 +4,7 @@ import { customDomains, domainVerificationLogs } from '../schema.js';
 import { eq, and } from 'drizzle-orm';
 import dns from 'dns';
 import { promisify } from 'util';
-import { publishEvent } from '../kafka.js';
+import { publishEvent } from '@qr/common';
 
 const resolveCname = promisify(dns.resolveCname);
 const resolveTxt = promisify(dns.resolveTxt);

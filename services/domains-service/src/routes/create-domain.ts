@@ -3,7 +3,7 @@ import { db } from '../db.js';
 import { customDomains, domainVerificationLogs } from '../schema.js';
 import { eq } from 'drizzle-orm';
 import { randomBytes } from 'crypto';
-import { publishEvent } from '../kafka.js';
+import { publishEvent } from '@qr/common';
 
 /**
  * POST /domains

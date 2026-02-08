@@ -1,6 +1,6 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
-import { producer, consumer } from './kafka';
+import { createProducer, createConsumer } from '@qr/common';
 import { handleKafkaMessages } from './lib/kafka-handler';
 import { testRoutes } from './routes/test';
 
@@ -42,8 +42,6 @@ async function gracefulShutdown() {
   server.log.info('Shutting down gracefully...');
   
   try {
-    await producer.disconnect();
-    await consumer.disconnect();
     await server.close();
     server.log.info('Shutdown complete');
     process.exit(0);
@@ -59,8 +57,8 @@ process.on('SIGINT', gracefulShutdown);
 // Start server
 async function start() {
   try {
-    // Connect to Kafka
-    await producer.connect();
+    // Connect to Kafka via @qr/common (auto-connects with fallback)
+    const producer = await createProducer();
     server.log.info('Kafka producer connected');
     
     // Start consuming messages

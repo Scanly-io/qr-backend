@@ -3,3 +3,8 @@
 export function micrositeCacheKey(qrId: string): string {
 	return `microsite:${qrId}`;
 }
+
+// Cache key for the JSON data endpoint (React SPA rendering)
+export function micrositeDataCacheKey(qrId: string): string {
+	return `microsite:data:${qrId}`;
+}

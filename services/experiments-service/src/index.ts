@@ -51,7 +51,7 @@
 
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
-import { connectKafka, disconnectKafka, consumer } from './kafka';
+import { createConsumer } from '@qr/common';
 import { handleKafkaMessages } from './lib/kafka-handler';
 
 /**
@@ -159,7 +159,7 @@ async function start() {
     
     if (kafkaEnabled) {
       try {
-        await connectKafka();
+        const consumer = await createConsumer('experiments-service-group');
         
         // ─── 5. Start Consuming Kafka Messages ───────────────────────────────
         // Listen for events from other services and react to them
@@ -196,18 +196,12 @@ const kafkaEnabled = process.env.KAFKA_ENABLED !== 'false';
 
 process.on('SIGINT', async () => {
   server.log.info('📦 Shutting down gracefully...');
-  if (kafkaEnabled) {
-    await disconnectKafka();   // Close Kafka connections
-  }
   await server.close();       // Close HTTP server
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
   server.log.info('📦 Shutting down gracefully...');
-  if (kafkaEnabled) {
-    await disconnectKafka();   // Close Kafka connections
-  }
   await server.close();       // Close HTTP server
   process.exit(0);
 });

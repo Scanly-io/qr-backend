@@ -2,6 +2,7 @@ import {db} from '../db.js';
 import {events} from '../schema.js';
 import {z} from 'zod';
 import {and, eq, desc, gte, count, sql} from 'drizzle-orm';
+import { verifyJWT, withDLQ } from '@qr/common';
 
 /**
  * ==========================================
@@ -65,6 +66,9 @@ const querySchema = z.object({
 });
 
 export default async function analyticsRoutes(app: any) {
+  // Protect ALL analytics routes with JWT authentication
+  app.addHook('preHandler', verifyJWT);
+
   /**
    * GET /analytics/:qrId/summary
    * 
@@ -82,9 +86,9 @@ export default async function analyticsRoutes(app: any) {
    */
   app.get(
     '/analytics/:qrId/summary', async (req: any, reply: any) => {
-        try {
-          const qrId = req.params.qrId;
+        const qrId = req.params.qrId;
 
+        const result = await withDLQ(async () => {
           // Total events for this QR code
           const totalResult = await db  
               .select({ count: count() })
@@ -122,15 +126,14 @@ export default async function analyticsRoutes(app: any) {
               );
           const last7 = Number(last7Result[0]?.count) || 0;
 
-          return reply.send({ 
-            totalevents: total, 
-            todayevents: today, 
-            last7Daysevents: last7 
-          });
-        } catch (error) {
-          console.error('Error fetching analytics summary:', error);
+          return { totalevents: total, todayevents: today, last7Daysevents: last7 };
+        }, { service: "analytics", operation: "summary", metadata: { qrId } });
+
+        if (!result.success) {
           return reply.code(500).send({ error: 'Failed to fetch analytics summary' });
         }
+
+        return reply.send(result.data);
     }
     );
   
@@ -153,30 +156,30 @@ export default async function analyticsRoutes(app: any) {
    * Example: 1 year of data = 365 records = ~10 KB response
    */
   app.get("/analytics/:qrId/timeseries", async (req: any, reply: any) => {
-    try {
       const qrId = req.params.qrId;
 
-      // Use ORM with sql for DATE grouping (some SQL needed for date functions)
-      const result = await db
-        .select({
-          date: sql<string>`DATE(${events.timestamp})`,
-          count: count(),
-        })
-        .from(events)
-        .where(eq(events.qrId, qrId))
-        .groupBy(sql`DATE(${events.timestamp})`)
-        .orderBy(sql`DATE(${events.timestamp}) ASC`);
-      
-      const timeSeries = result.map((row) => ({
-        date: row.date,
-        count: Number(row.count),
-      }));
-      
-      return reply.send({ timeSeries });
-    } catch (error) {
-      console.error('Error fetching timeseries:', error);
-      return reply.code(500).send({ error: 'Failed to fetch timeseries data' });
-    }
+      const result = await withDLQ(async () => {
+        const data = await db
+          .select({
+            date: sql<string>`DATE(${events.timestamp})`,
+            count: count(),
+          })
+          .from(events)
+          .where(eq(events.qrId, qrId))
+          .groupBy(sql`DATE(${events.timestamp})`)
+          .orderBy(sql`DATE(${events.timestamp}) ASC`);
+        
+        return data.map((row) => ({
+          date: row.date,
+          count: Number(row.count),
+        }));
+      }, { service: "analytics", operation: "timeseries", metadata: { qrId } });
+
+      if (!result.success) {
+        return reply.code(500).send({ error: 'Failed to fetch timeseries data' });
+      }
+
+      return reply.send({ timeSeries: result.data });
   });
 
   /**
@@ -229,7 +232,6 @@ export default async function analyticsRoutes(app: any) {
    * - pagination: { page, pageSize, total, totalPages }
    */
   app.get("/analytics/:qrId/raw", async (req: any, reply: any) => {
-    try {
       const qrId = req.params.qrId;
       const parsed = querySchema.safeParse(req.query);
 
@@ -242,49 +244,53 @@ export default async function analyticsRoutes(app: any) {
 
       const { startDate, endDate, page, pageSize } = parsed.data;
       
-      // Build WHERE conditions using ORM
-      const conditions = [eq(events.qrId, qrId)];
-      
-      if (startDate) {
-        conditions.push(gte(events.timestamp, new Date(startDate)));
-      }
-      
-      if (endDate) {
-        const endDateTime = new Date(endDate);
-        endDateTime.setHours(23, 59, 59, 999); // End of day
-        conditions.push(sql`${events.timestamp} <= ${endDateTime}`);
-      }
-
-      // Get total count for pagination metadata
-      const totalResult = await db
-        .select({ count: count() })
-        .from(events)
-        .where(and(...conditions));
-      const total = Number(totalResult[0]?.count) || 0;
-
-      // Get paginated records using ORM
-      const offset = (page - 1) * pageSize;
-      const records = await db
-        .select()
-        .from(events)
-        .where(and(...conditions))
-        .orderBy(desc(events.timestamp))
-        .limit(pageSize)
-        .offset(offset);
-      
-      return reply.send({ 
-        records,
-        pagination: {
-          page,
-          pageSize,
-          total,
-          totalPages: Math.ceil(total / pageSize),
+      const result = await withDLQ(async () => {
+        // Build WHERE conditions using ORM
+        const conditions = [eq(events.qrId, qrId)];
+        
+        if (startDate) {
+          conditions.push(gte(events.timestamp, new Date(startDate)));
         }
-      });
-    } catch (error) {
-      console.error('Error fetching raw analytics:', error);
-      return reply.code(500).send({ error: 'Failed to fetch raw analytics data' });
-    }
+        
+        if (endDate) {
+          const endDateTime = new Date(endDate);
+          endDateTime.setHours(23, 59, 59, 999);
+          conditions.push(sql`${events.timestamp} <= ${endDateTime}`);
+        }
+
+        // Get total count for pagination metadata
+        const totalResult = await db
+          .select({ count: count() })
+          .from(events)
+          .where(and(...conditions));
+        const total = Number(totalResult[0]?.count) || 0;
+
+        // Get paginated records using ORM
+        const offset = (page - 1) * pageSize;
+        const records = await db
+          .select()
+          .from(events)
+          .where(and(...conditions))
+          .orderBy(desc(events.timestamp))
+          .limit(pageSize)
+          .offset(offset);
+        
+        return { 
+          records,
+          pagination: {
+            page,
+            pageSize,
+            total,
+            totalPages: Math.ceil(total / pageSize),
+          }
+        };
+      }, { service: "analytics", operation: "raw", metadata: { qrId } });
+
+      if (!result.success) {
+        return reply.code(500).send({ error: 'Failed to fetch raw analytics data' });
+      }
+
+      return reply.send(result.data);
   });
 
   /**
@@ -312,48 +318,51 @@ export default async function analyticsRoutes(app: any) {
    * }
    */
   app.get("/analytics/:qrId/patterns", async (req: any, reply: any) => {
-    try {
       const qrId = req.params.qrId;
 
-      // Get events by hour of day (0-23)
-      const hourlyData = await db
-        .select({
-          hour: sql<number>`EXTRACT(HOUR FROM ${events.timestamp})`,
-          count: count(),
-        })
-        .from(events)
-        .where(eq(events.qrId, qrId))
-        .groupBy(sql`EXTRACT(HOUR FROM ${events.timestamp})`)
-        .orderBy(sql`EXTRACT(HOUR FROM ${events.timestamp}) ASC`);
+      const result = await withDLQ(async () => {
+        // Get events by hour of day (0-23)
+        const hourlyData = await db
+          .select({
+            hour: sql<number>`EXTRACT(HOUR FROM ${events.timestamp})`,
+            count: count(),
+          })
+          .from(events)
+          .where(eq(events.qrId, qrId))
+          .groupBy(sql`EXTRACT(HOUR FROM ${events.timestamp})`)
+          .orderBy(sql`EXTRACT(HOUR FROM ${events.timestamp}) ASC`);
 
-      const byHourOfDay = hourlyData.map((row) => ({
-        hour: Number(row.hour),
-        count: Number(row.count),
-      }));
+        const byHourOfDay = hourlyData.map((row) => ({
+          hour: Number(row.hour),
+          count: Number(row.count),
+        }));
 
-      // Get events by day of week (0=Sunday, 6=Saturday)
-      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      const dailyData = await db
-        .select({
-          day: sql<number>`EXTRACT(DOW FROM ${events.timestamp})`,
-          count: count(),
-        })
-        .from(events)
-        .where(eq(events.qrId, qrId))
-        .groupBy(sql`EXTRACT(DOW FROM ${events.timestamp})`)
-        .orderBy(sql`EXTRACT(DOW FROM ${events.timestamp}) ASC`);
+        // Get events by day of week (0=Sunday, 6=Saturday)
+        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const dailyData = await db
+          .select({
+            day: sql<number>`EXTRACT(DOW FROM ${events.timestamp})`,
+            count: count(),
+          })
+          .from(events)
+          .where(eq(events.qrId, qrId))
+          .groupBy(sql`EXTRACT(DOW FROM ${events.timestamp})`)
+          .orderBy(sql`EXTRACT(DOW FROM ${events.timestamp}) ASC`);
 
-      const byDayOfWeek = dailyData.map((row) => ({
-        day: Number(row.day),
-        dayName: dayNames[Number(row.day)],
-        count: Number(row.count),
-      }));
+        const byDayOfWeek = dailyData.map((row) => ({
+          day: Number(row.day),
+          dayName: dayNames[Number(row.day)],
+          count: Number(row.count),
+        }));
 
-      return reply.send({ byHourOfDay, byDayOfWeek });
-    } catch (error) {
-      console.error('Error fetching pattern analytics:', error);
-      return reply.code(500).send({ error: 'Failed to fetch pattern analytics' });
-    }
+        return { byHourOfDay, byDayOfWeek };
+      }, { service: "analytics", operation: "patterns", metadata: { qrId } });
+
+      if (!result.success) {
+        return reply.code(500).send({ error: 'Failed to fetch pattern analytics' });
+      }
+
+      return reply.send(result.data);
   });
 
   /**
@@ -412,88 +421,74 @@ export default async function analyticsRoutes(app: any) {
    * - High CTR but low leads? → Form is too long or scary (remove optional fields)
    */
   app.get("/analytics/:qrId/funnel", async (req: any, reply: any) => {
-    try {
       const { qrId } = req.params;
 
-      // Count QR scans (when user scans the QR code)
-      // This event is tracked by qr-service /scan/:qrId endpoint
-      const totalScans = await db
-        .select({ count: count() })
-        .from(events)
-        .where(
-          and(
-            eq(events.qrId, qrId),
-            eq(events.eventType, 'qr.scanned')
-          )
-        );
+      const result = await withDLQ(async () => {
+        const totalScans = await db
+          .select({ count: count() })
+          .from(events)
+          .where(
+            and(
+              eq(events.qrId, qrId),
+              eq(events.eventType, 'qr.scanned')
+            )
+          );
 
-      // Count microsite views (when user views the microsite page)
-      // This can happen from:
-      // 1. QR scan → redirect → view (tracked by microsite-service)
-      // 2. Direct link access → view (also tracked by microsite-service)
-      const totalViews = await db
-        .select({ count: count() })
-        .from(events)
-        .where(
-          and(
-            eq(events.qrId, qrId),
-            eq(events.eventType, 'microsite.viewed')
-          )
-        );
+        const totalViews = await db
+          .select({ count: count() })
+          .from(events)
+          .where(
+            and(
+              eq(events.qrId, qrId),
+              eq(events.eventType, 'microsite.viewed')
+            )
+          );
 
-      // Count button clicks (when user clicks a CTA button)
-      const totalClicks = await db
-        .select({ count: count() })
-        .from(events)
-        .where(
-          and(
-            eq(events.qrId, qrId),
-            eq(events.eventType, 'button.clicked')
-          )
-        );
+        const totalClicks = await db
+          .select({ count: count() })
+          .from(events)
+          .where(
+            and(
+              eq(events.qrId, qrId),
+              eq(events.eventType, 'button.clicked')
+            )
+          );
 
-      // Count leads captured (when user submits contact form)
-      const totalLeads = await db
-        .select({ count: count() })
-        .from(events)
-        .where(
-          and(
-            eq(events.qrId, qrId),
-            eq(events.eventType, 'lead.captured')
-          )
-        );
+        const totalLeads = await db
+          .select({ count: count() })
+          .from(events)
+          .where(
+            and(
+              eq(events.qrId, qrId),
+              eq(events.eventType, 'lead.captured')
+            )
+          );
 
-      // Extract counts from query results
-      const scans = Number(totalScans[0]?.count) || 0;
-      const views = Number(totalViews[0]?.count) || 0;
-      const clicks = Number(totalClicks[0]?.count) || 0;
-      const leads = Number(totalLeads[0]?.count) || 0;
+        const scans = Number(totalScans[0]?.count) || 0;
+        const views = Number(totalViews[0]?.count) || 0;
+        const clicks = Number(totalClicks[0]?.count) || 0;
+        const leads = Number(totalLeads[0]?.count) || 0;
 
-      // Calculate conversion metrics
-      // viewRate: % of scans that resulted in microsite views
-      // - Can be >100% if people share the direct link (more views than scans)
-      // - Can be <100% if scan tracking fails or people close before page loads
-      const viewRate = scans > 0 ? (views / scans) * 100 : 0;
+        const viewRate = scans > 0 ? (views / scans) * 100 : 0;
+        const clickRate = views > 0 ? (clicks / views) * 100 : 0;
+        const leadConversionRate = views > 0 ? (leads / views) * 100 : 0;
 
-      // clickRate: % of views that resulted in button clicks
-      const clickRate = views > 0 ? (clicks / views) * 100 : 0;
+        return {
+          scans,
+          views,
+          clicks,
+          leads,
+          viewRate: Number(viewRate.toFixed(2)),
+          clickRate: Number(clickRate.toFixed(2)),
+          leadConversionRate: Number(leadConversionRate.toFixed(2)),
+        };
+      }, { service: "analytics", operation: "funnel", metadata: { qrId } });
 
-      // leadConversionRate: % of views that became leads
-      const leadConversionRate = views > 0 ? (leads / views) * 100 : 0;
+      if (!result.success) {
+        return reply.code(500).send({ error: 'Failed to fetch funnel analytics' });
+      }
 
-      return reply.send({
-        scans,           // Step 1: QR scans
-        views,           // Step 2: Microsite views (may include direct links)
-        clicks,          // Step 3: Button clicks
-        leads,           // Step 4: Lead captures
-        viewRate: Number(viewRate.toFixed(2)),
-        clickRate: Number(clickRate.toFixed(2)),
-        leadConversionRate: Number(leadConversionRate.toFixed(2)),
-      });
-    } catch (error) {
-      console.error('Error fetching funnel analytics:', error);
-      return reply.code(500).send({ error: 'Failed to fetch funnel analytics' });
-    }
+      return reply.send(result.data);
   });
 
   /**
@@ -546,100 +541,95 @@ export default async function analyticsRoutes(app: any) {
    * }
    */
   app.get("/analytics/:qrId/devices", async (req: any, reply: any) => {
-    try {
       const qrId = req.params.qrId;
       const { startDate, endDate } = req.query;
 
-      // Build WHERE conditions for optional date filtering
-      const conditions = [eq(events.qrId, qrId)];
-      
-      if (startDate) {
-        conditions.push(gte(events.timestamp, new Date(startDate)));
+      const result = await withDLQ(async () => {
+        // Build WHERE conditions for optional date filtering
+        const conditions = [eq(events.qrId, qrId)];
+        
+        if (startDate) {
+          conditions.push(gte(events.timestamp, new Date(startDate)));
+        }
+        
+        if (endDate) {
+          const endDateTime = new Date(endDate);
+          endDateTime.setHours(23, 59, 59, 999);
+          conditions.push(sql`${events.timestamp} <= ${endDateTime}`);
+        }
+
+        const deviceTypeData = await db
+          .select({
+            deviceType: events.deviceType,
+            count: count(),
+          })
+          .from(events)
+          .where(and(...conditions))
+          .groupBy(events.deviceType)
+          .orderBy(desc(count()));
+
+        const byDeviceType = deviceTypeData
+          .filter(row => row.deviceType)
+          .map((row) => ({
+            deviceType: row.deviceType!,
+            count: Number(row.count),
+          }));
+
+        const osData = await db
+          .select({
+            os: events.os,
+            count: count(),
+          })
+          .from(events)
+          .where(and(...conditions))
+          .groupBy(events.os)
+          .orderBy(desc(count()));
+
+        const byOS = osData
+          .filter(row => row.os)
+          .map((row) => ({
+            os: row.os!,
+            count: Number(row.count),
+          }));
+
+        const browserData = await db
+          .select({
+            browser: events.browser,
+            count: count(),
+          })
+          .from(events)
+          .where(and(...conditions))
+          .groupBy(events.browser)
+          .orderBy(desc(count()));
+
+        const byBrowser = browserData
+          .filter(row => row.browser)
+          .map((row) => ({
+            browser: row.browser!,
+            count: Number(row.count),
+          }));
+
+        const totalResult = await db
+          .select({ count: count() })
+          .from(events)
+          .where(and(...conditions));
+        const totalevents = Number(totalResult[0]?.count) || 0;
+
+        return { 
+          qrId,
+          period: { start: startDate || null, end: endDate || null },
+          byDeviceType,
+          byOS,
+          byBrowser,
+          totalevents,
+        };
+      }, { service: "analytics", operation: "devices", metadata: { qrId } });
+
+      if (!result.success) {
+        return reply.code(500).send({ error: 'Failed to fetch device analytics' });
       }
-      
-      if (endDate) {
-        const endDateTime = new Date(endDate);
-        endDateTime.setHours(23, 59, 59, 999); // Include full end day
-        conditions.push(sql`${events.timestamp} <= ${endDateTime}`);
-      }
 
-      // Aggregate by device type using dedicated column
-      // Much faster than parsing JSON from rawPayload!
-      const deviceTypeData = await db
-        .select({
-          deviceType: events.deviceType,
-          count: count(),
-        })
-        .from(events)
-        .where(and(...conditions))
-        .groupBy(events.deviceType)
-        .orderBy(desc(count())); // Most common devices first
-
-      const byDeviceType = deviceTypeData
-        .filter(row => row.deviceType) // Exclude null values
-        .map((row) => ({
-          deviceType: row.deviceType!,
-          count: Number(row.count),
-        }));
-
-      // Aggregate by operating system
-      const osData = await db
-        .select({
-          os: events.os,
-          count: count(),
-        })
-        .from(events)
-        .where(and(...conditions))
-        .groupBy(events.os)
-        .orderBy(desc(count()));
-
-      const byOS = osData
-        .filter(row => row.os)
-        .map((row) => ({
-          os: row.os!,
-          count: Number(row.count),
-        }));
-
-      // Aggregate by browser
-      const browserData = await db
-        .select({
-          browser: events.browser,
-          count: count(),
-        })
-        .from(events)
-        .where(and(...conditions))
-        .groupBy(events.browser)
-        .orderBy(desc(count()));
-
-      const byBrowser = browserData
-        .filter(row => row.browser)
-        .map((row) => ({
-          browser: row.browser!,
-          count: Number(row.count),
-        }));
-
-      // Get total scan count for this QR code
-      const totalResult = await db
-        .select({ count: count() })
-        .from(events)
-        .where(and(...conditions));
-      const totalevents = Number(totalResult[0]?.count) || 0;
-
-      return reply.send({ 
-        qrId,
-        period: {
-          start: startDate || null,
-          end: endDate || null,
-        },
-        byDeviceType,
-        byOS,
-        byBrowser,
-        totalevents,
-      });
-    } catch (error) {
-      console.error('Error fetching device analytics:', error);
-      return reply.code(500).send({ error: 'Failed to fetch device analytics' });
-    }
+      return reply.send(result.data);
   });
 
   /**
@@ -682,84 +672,66 @@ export default async function analyticsRoutes(app: any) {
    * Filename format: qr-analytics-{qrId}-{YYYY-MM-DD}.csv
    */
   app.get("/analytics/:qrId/export", async (req: any, reply: any) => {
-    try {
       const qrId = req.params.qrId;
       const { startDate, endDate, limit = 10000 } = req.query;
 
-      // Build date filter conditions
-      const conditions = [eq(events.qrId, qrId)];
-      
-      if (startDate) {
-        conditions.push(gte(events.timestamp, new Date(startDate)));
-      }
-      
-      if (endDate) {
-        const endDateTime = new Date(endDate);
-        endDateTime.setHours(23, 59, 59, 999); // Include full end day
-        conditions.push(sql`${events.timestamp} <= ${endDateTime}`);
-      }
+      const result = await withDLQ(async () => {
+        // Build date filter conditions
+        const conditions = [eq(events.qrId, qrId)];
+        
+        if (startDate) {
+          conditions.push(gte(events.timestamp, new Date(startDate)));
+        }
+        
+        if (endDate) {
+          const endDateTime = new Date(endDate);
+          endDateTime.setHours(23, 59, 59, 999);
+          conditions.push(sql`${events.timestamp} <= ${endDateTime}`);
+        }
 
-      // Fetch records with limit to prevent massive exports
-      // Always order by timestamp DESC (newest first) for relevance
-      const records = await db
-        .select()
-        .from(events)
-        .where(and(...conditions))
-        .orderBy(desc(events.timestamp))
-        .limit(Number(limit));
+        const records = await db
+          .select()
+          .from(events)
+          .where(and(...conditions))
+          .orderBy(desc(events.timestamp))
+          .limit(Number(limit));
 
-      // Build CSV with device tracking columns
-      // Include all the new analytics fields we're capturing!
-      const headers = [
-        'ID',
-        'QR ID',
-        'Event Type',
-        'Timestamp',
-        'Device Type',
-        'OS',
-        'Browser',
-        'Country',
-        'City',
-        'Referrer',
-        'Session ID',
-        'User Agent',
-      ];
-      
-      // Initialize CSV rows array with headers
-      const csvRows = [headers.join(',')];
-      
-      // Convert each record to CSV row
-      for (const record of records) {
-        const row = [
-          record.id,
-          record.qrId,
-          record.eventType,
-          record.timestamp.toISOString(),
-          record.deviceType || '',    // New column!
-          record.os || '',             // New column!
-          record.browser || '',        // New column!
-          record.country || '',        // New column!
-          record.city || '',           // New column!
-          record.referrer || '',       // New column!
-          record.sessionId || '',      // New column!
-          '', // userAgent removed as it doesn't exist in schema
+        const headers = [
+          'ID', 'QR ID', 'Event Type', 'Timestamp', 'Device Type',
+          'OS', 'Browser', 'Country', 'City', 'Referrer', 'Session ID', 'User Agent',
         ];
-        // Wrap each field in quotes to handle commas and special chars
-        csvRows.push(row.map(field => `"${field}"`).join(','));
+        
+        const csvRows = [headers.join(',')];
+        
+        for (const record of records) {
+          const row = [
+            record.id,
+            record.qrId,
+            record.eventType,
+            record.timestamp.toISOString(),
+            record.deviceType || '',
+            record.os || '',
+            record.browser || '',
+            record.country || '',
+            record.city || '',
+            record.referrer || '',
+            record.sessionId || '',
+            '',
+          ];
+          csvRows.push(row.map(field => `"${field}"`).join(','));
+        }
+
+        return csvRows.join('\n');
+      }, { service: "analytics", operation: "export", metadata: { qrId } });
+
+      if (!result.success) {
+        return reply.code(500).send({ error: 'Failed to export analytics data' });
       }
 
-      const csv = csvRows.join('\n');
-
-      // Set HTTP headers for file download
-      // Browser will prompt user to save the file
       reply.header('Content-Type', 'text/csv');
       reply.header('Content-Disposition', `attachment; filename="qr-analytics-${qrId}-${new Date().toISOString().split('T')[0]}.csv"`);
       
-      return reply.send(csv);
-    } catch (error) {
-      console.error('Error exporting analytics:', error);
-      return reply.code(500).send({ error: 'Failed to export analytics data' });
-    }
+      return reply.send(result.data);
   });
 
   /**
@@ -801,91 +773,82 @@ export default async function analyticsRoutes(app: any) {
    * - Calculate true conversion rate (leads / unique visitors)
    */
   app.get("/analytics/:qrId/unique-visitors", async (req: any, reply: any) => {
-    try {
       const qrId = req.params.qrId;
 
-      // Count DISTINCT sessionId for unique visitors (all time)
-      // sessionId is generated once per browser session
-      const uniqueVisitorsResult = await db
-        .select({ 
-          count: sql<number>`COUNT(DISTINCT ${events.sessionId})` 
-        })
-        .from(events)
-        .where(
-          and(
-            eq(events.qrId, qrId),
-            eq(events.eventType, 'microsite.viewed'),
-            sql`${events.sessionId} IS NOT NULL` // Exclude events without session
-          )
-        );
-      const totalUniqueVisitors = Number(uniqueVisitorsResult[0]?.count) || 0;
+      const result = await withDLQ(async () => {
+        const uniqueVisitorsResult = await db
+          .select({ count: sql<number>`COUNT(DISTINCT ${events.sessionId})` })
+          .from(events)
+          .where(
+            and(
+              eq(events.qrId, qrId),
+              eq(events.eventType, 'microsite.viewed'),
+              sql`${events.sessionId} IS NOT NULL`
+            )
+          );
+        const totalUniqueVisitors = Number(uniqueVisitorsResult[0]?.count) || 0;
 
-      // Unique visitors today (midnight to now UTC)
-      const startOfToday = new Date();
-      startOfToday.setUTCHours(0, 0, 0, 0);
-      
-      const todayUniqueResult = await db
-        .select({ 
-          count: sql<number>`COUNT(DISTINCT ${events.sessionId})` 
-        })
-        .from(events)
-        .where(
-          and(
-            eq(events.qrId, qrId),
-            eq(events.eventType, 'microsite.viewed'),
-            gte(events.timestamp, startOfToday),
-            sql`${events.sessionId} IS NOT NULL`
-          )
-        );
-      const todayUniqueVisitors = Number(todayUniqueResult[0]?.count) || 0;
+        const startOfToday = new Date();
+        startOfToday.setUTCHours(0, 0, 0, 0);
+        
+        const todayUniqueResult = await db
+          .select({ count: sql<number>`COUNT(DISTINCT ${events.sessionId})` })
+          .from(events)
+          .where(
+            and(
+              eq(events.qrId, qrId),
+              eq(events.eventType, 'microsite.viewed'),
+              gte(events.timestamp, startOfToday),
+              sql`${events.sessionId} IS NOT NULL`
+            )
+          );
+        const todayUniqueVisitors = Number(todayUniqueResult[0]?.count) || 0;
 
-      // Unique visitors last 7 days
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      
-      const last7DaysUniqueResult = await db
-        .select({ 
-          count: sql<number>`COUNT(DISTINCT ${events.sessionId})` 
-        })
-        .from(events)
-        .where(
-          and(
-            eq(events.qrId, qrId),
-            eq(events.eventType, 'microsite.viewed'),
-            gte(events.timestamp, sevenDaysAgo),
-            sql`${events.sessionId} IS NOT NULL`
-          )
-        );
-      const last7DaysUniqueVisitors = Number(last7DaysUniqueResult[0]?.count) || 0;
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        
+        const last7DaysUniqueResult = await db
+          .select({ count: sql<number>`COUNT(DISTINCT ${events.sessionId})` })
+          .from(events)
+          .where(
+            and(
+              eq(events.qrId, qrId),
+              eq(events.eventType, 'microsite.viewed'),
+              gte(events.timestamp, sevenDaysAgo),
+              sql`${events.sessionId} IS NOT NULL`
+            )
+          );
+        const last7DaysUniqueVisitors = Number(last7DaysUniqueResult[0]?.count) || 0;
 
-      // Total views (including repeat views from same visitor)
-      const totalViewsResult = await db
-        .select({ count: count() })
-        .from(events)
-        .where(
-          and(
-            eq(events.qrId, qrId),
-            eq(events.eventType, 'microsite.viewed')
-          )
-        );
-      const totalViews = Number(totalViewsResult[0]?.count) || 0;
+        const totalViewsResult = await db
+          .select({ count: count() })
+          .from(events)
+          .where(
+            and(
+              eq(events.qrId, qrId),
+              eq(events.eventType, 'microsite.viewed')
+            )
+          );
+        const totalViews = Number(totalViewsResult[0]?.count) || 0;
 
-      // Calculate average views per visitor
-      const avgViewsPerVisitor = totalUniqueVisitors > 0 
-        ? totalViews / totalUniqueVisitors 
-        : 0;
+        const avgViewsPerVisitor = totalUniqueVisitors > 0 
+          ? totalViews / totalUniqueVisitors 
+          : 0;
 
-      return reply.send({
-        totalUniqueVisitors,
-        todayUniqueVisitors,
-        last7DaysUniqueVisitors,
-        totalViews,
-        avgViewsPerVisitor: Number(avgViewsPerVisitor.toFixed(2)),
-      });
-    } catch (error) {
-      console.error('Error fetching unique visitors:', error);
-      return reply.code(500).send({ error: 'Failed to fetch unique visitors data' });
-    }
+        return {
+          totalUniqueVisitors,
+          todayUniqueVisitors,
+          last7DaysUniqueVisitors,
+          totalViews,
+          avgViewsPerVisitor: Number(avgViewsPerVisitor.toFixed(2)),
+        };
+      }, { service: "analytics", operation: "unique-visitors", metadata: { qrId } });
+
+      if (!result.success) {
+        return reply.code(500).send({ error: 'Failed to fetch unique visitors data' });
+      }
+
+      return reply.send(result.data);
   });
 
   /**
@@ -941,85 +904,71 @@ export default async function analyticsRoutes(app: any) {
    * - "Are users clicking or just viewing?"
    */
   app.get("/analytics/:qrId/cta-buttons", async (req: any, reply: any) => {
-    try {
       const qrId = req.params.qrId;
 
-      // Get total microsite views for CTR calculation
-      const totalViewsResult = await db
-        .select({ count: count() })
-        .from(events)
-        .where(
-          and(
-            eq(events.qrId, qrId),
-            eq(events.eventType, 'microsite.viewed')
-          )
-        );
-      const totalViews = Number(totalViewsResult[0]?.count) || 0;
+      const result = await withDLQ(async () => {
+        const totalViewsResult = await db
+          .select({ count: count() })
+          .from(events)
+          .where(
+            and(
+              eq(events.qrId, qrId),
+              eq(events.eventType, 'microsite.viewed')
+            )
+          );
+        const totalViews = Number(totalViewsResult[0]?.count) || 0;
 
-      // Get button click events
-      // rawPayload contains: { buttonId, label, url }
-      const buttonClicksResult = await db
-        .select({
-          rawPayload: events.rawPayload,
-        })
-        .from(events)
-        .where(
-          and(
-            eq(events.qrId, qrId),
-            eq(events.eventType, 'button.clicked')
-          )
-        );
+        const buttonClicksResult = await db
+          .select({ rawPayload: events.rawPayload })
+          .from(events)
+          .where(
+            and(
+              eq(events.qrId, qrId),
+              eq(events.eventType, 'button.clicked')
+            )
+          );
 
-      // Aggregate button clicks by buttonId
-      const buttonStats = new Map<string, {
-        buttonId: string;
-        label: string;
-        url: string;
-        clicks: number;
-      }>();
+        const buttonStats = new Map<string, {
+          buttonId: string;
+          label: string;
+          url: string;
+          clicks: number;
+        }>();
 
-      for (const record of buttonClicksResult) {
-        const payload = record.rawPayload as any;
-        const buttonId = payload?.buttonId;
-        const label = payload?.label || 'Unknown';
-        const url = payload?.url || '';
+        for (const record of buttonClicksResult) {
+          const payload = record.rawPayload as any;
+          const buttonId = payload?.buttonId;
+          const label = payload?.label || 'Unknown';
+          const url = payload?.url || '';
 
-        if (buttonId) {
-          if (buttonStats.has(buttonId)) {
-            buttonStats.get(buttonId)!.clicks++;
-          } else {
-            buttonStats.set(buttonId, {
-              buttonId,
-              label,
-              url,
-              clicks: 1,
-            });
+          if (buttonId) {
+            if (buttonStats.has(buttonId)) {
+              buttonStats.get(buttonId)!.clicks++;
+            } else {
+              buttonStats.set(buttonId, { buttonId, label, url, clicks: 1 });
+            }
           }
         }
+
+        const buttons = Array.from(buttonStats.values())
+          .map(button => ({
+            ...button,
+            clickThroughRate: totalViews > 0 
+              ? Number(((button.clicks / totalViews) * 100).toFixed(2))
+              : 0,
+          }))
+          .sort((a, b) => b.clicks - a.clicks);
+
+        const totalButtonClicks = buttons.reduce((sum, btn) => sum + btn.clicks, 0);
+
+        return { totalViews, totalButtonClicks, buttons };
+      }, { service: "analytics", operation: "cta-buttons", metadata: { qrId } });
+
+      if (!result.success) {
+        return reply.code(500).send({ error: 'Failed to fetch CTA button analytics' });
       }
 
-      // Calculate CTR for each button and convert to array
-      const buttons = Array.from(buttonStats.values())
-        .map(button => ({
-          ...button,
-          clickThroughRate: totalViews > 0 
-            ? Number(((button.clicks / totalViews) * 100).toFixed(2))
-            : 0,
-        }))
-        .sort((a, b) => b.clicks - a.clicks); // Sort by clicks (most popular first)
-
-      // Calculate total button clicks
-      const totalButtonClicks = buttons.reduce((sum, btn) => sum + btn.clicks, 0);
-
-      return reply.send({
-        totalViews,
-        totalButtonClicks,
-        buttons,
-      });
-    } catch (error) {
-      console.error('Error fetching CTA button analytics:', error);
-      return reply.code(500).send({ error: 'Failed to fetch CTA button analytics' });
-    }
+      return reply.send(result.data);
   });
 
   /**
@@ -1080,81 +1029,67 @@ export default async function analyticsRoutes(app: any) {
    * - Measure partnership ROI
    */
   app.get("/analytics/:qrId/referrers", async (req: any, reply: any) => {
-    try {
       const qrId = req.params.qrId;
       const { startDate, endDate } = req.query;
 
-      // Build WHERE conditions for optional date filtering
-      const conditions = [
-        eq(events.qrId, qrId),
-        eq(events.eventType, 'microsite.viewed') // Only count microsite views
-      ];
-      
-      if (startDate) {
-        conditions.push(gte(events.timestamp, new Date(startDate)));
-      }
-      
-      if (endDate) {
-        const endDateTime = new Date(endDate);
-        endDateTime.setHours(23, 59, 59, 999);
-        conditions.push(sql`${events.timestamp} <= ${endDateTime}`);
-      }
-
-      // Get total views for percentage calculation
-      const totalViewsResult = await db
-        .select({ count: count() })
-        .from(events)
-        .where(and(...conditions));
-      const totalViews = Number(totalViewsResult[0]?.count) || 0;
-
-      // Aggregate by referrer
-      const referrerData = await db
-        .select({
-          referrer: events.referrer,
-          count: count(),
-        })
-        .from(events)
-        .where(and(...conditions))
-        .groupBy(events.referrer)
-        .orderBy(desc(count())); // Most popular referrers first
-
-      // Extract domain from full referrer URL and calculate percentages
-      const referrers = referrerData.map((row) => {
-        const referrerUrl = row.referrer;
-        let domain = null;
+      const result = await withDLQ(async () => {
+        const conditions = [
+          eq(events.qrId, qrId),
+          eq(events.eventType, 'microsite.viewed')
+        ];
         
-        // Extract domain from URL
-        if (referrerUrl) {
-          try {
-            const url = new URL(referrerUrl);
-            domain = url.hostname.replace('www.', ''); // Remove www prefix
-          } catch (e) {
-            // If not a valid URL, use the raw referrer value
-            domain = referrerUrl;
-          }
+        if (startDate) {
+          conditions.push(gte(events.timestamp, new Date(startDate)));
+        }
+        
+        if (endDate) {
+          const endDateTime = new Date(endDate);
+          endDateTime.setHours(23, 59, 59, 999);
+          conditions.push(sql`${events.timestamp} <= ${endDateTime}`);
         }
 
-        const views = Number(row.count);
-        const percentage = totalViews > 0 
-          ? Number(((views / totalViews) * 100).toFixed(2))
-          : 0;
+        const totalViewsResult = await db
+          .select({ count: count() })
+          .from(events)
+          .where(and(...conditions));
+        const totalViews = Number(totalViewsResult[0]?.count) || 0;
 
-        return {
-          referrer: referrerUrl || '(direct)',
-          domain,
-          views,
-          percentage,
-        };
-      });
+        const referrerData = await db
+          .select({ referrer: events.referrer, count: count() })
+          .from(events)
+          .where(and(...conditions))
+          .groupBy(events.referrer)
+          .orderBy(desc(count()));
 
-      return reply.send({
-        totalViews,
-        referrers,
-      });
-    } catch (error) {
-      console.error('Error fetching referrer analytics:', error);
-      return reply.code(500).send({ error: 'Failed to fetch referrer analytics' });
-    }
+        const referrers = referrerData.map((row) => {
+          const referrerUrl = row.referrer;
+          let domain = null;
+          
+          if (referrerUrl) {
+            try {
+              const url = new URL(referrerUrl);
+              domain = url.hostname.replace('www.', '');
+            } catch {
+              domain = referrerUrl;
+            }
+          }
+
+          const views = Number(row.count);
+          const percentage = totalViews > 0 
+            ? Number(((views / totalViews) * 100).toFixed(2))
+            : 0;
+
+          return { referrer: referrerUrl || '(direct)', domain, views, percentage };
+        });
+
+        return { totalViews, referrers };
+      }, { service: "analytics", operation: "referrers", metadata: { qrId } });
+
+      if (!result.success) {
+        return reply.code(500).send({ error: 'Failed to fetch referrer analytics' });
+      }
+
+      return reply.send(result.data);
   });
 
   /**
@@ -1184,81 +1119,69 @@ export default async function analyticsRoutes(app: any) {
    * - Event planning (where to host pop-ups)
    */
   app.get("/analytics/:qrId/geography", async (req: any, reply: any) => {
-    try {
       const qrId = req.params.qrId;
       const { startDate, endDate } = req.query;
 
-      // Build WHERE conditions
-      const conditions = [eq(events.qrId, qrId)];
-      
-      if (startDate) {
-        conditions.push(gte(events.timestamp, new Date(startDate)));
+      const result = await withDLQ(async () => {
+        const conditions = [eq(events.qrId, qrId)];
+        
+        if (startDate) {
+          conditions.push(gte(events.timestamp, new Date(startDate)));
+        }
+        
+        if (endDate) {
+          const endDateTime = new Date(endDate);
+          endDateTime.setHours(23, 59, 59, 999);
+          conditions.push(sql`${events.timestamp} <= ${endDateTime}`);
+        }
+
+        const totalResult = await db
+          .select({ count: count() })
+          .from(events)
+          .where(and(...conditions));
+        const totalScans = Number(totalResult[0]?.count) || 0;
+
+        const countryData = await db
+          .select({ country: events.country, count: count() })
+          .from(events)
+          .where(and(...conditions))
+          .groupBy(events.country)
+          .orderBy(desc(count()));
+
+        const byCountry = countryData
+          .filter((row) => row.country)
+          .map((row) => ({
+            country: row.country!,
+            count: Number(row.count),
+            percentage: totalScans > 0 
+              ? Number(((Number(row.count) / totalScans) * 100).toFixed(2))
+              : 0,
+          }));
+
+        const cityData = await db
+          .select({ country: events.country, city: events.city, count: count() })
+          .from(events)
+          .where(and(...conditions))
+          .groupBy(events.country, events.city)
+          .orderBy(desc(count()))
+          .limit(20);
+
+        const byCity = cityData
+          .filter((row) => row.city && row.country)
+          .map((row) => ({
+            country: row.country!,
+            city: row.city!,
+            count: Number(row.count),
+          }));
+
+        return { totalScans, byCountry, byCity };
+      }, { service: "analytics", operation: "geography", metadata: { qrId } });
+
+      if (!result.success) {
+        return reply.code(500).send({ error: 'Failed to fetch geography analytics' });
       }
-      
-      if (endDate) {
-        const endDateTime = new Date(endDate);
-        endDateTime.setHours(23, 59, 59, 999);
-        conditions.push(sql`${events.timestamp} <= ${endDateTime}`);
-      }
 
-      // Get total scans
-      const totalResult = await db
-        .select({ count: count() })
-        .from(events)
-        .where(and(...conditions));
-      const totalScans = Number(totalResult[0]?.count) || 0;
-
-      // Aggregate by country
-      const countryData = await db
-        .select({
-          country: events.country,
-          count: count(),
-        })
-        .from(events)
-        .where(and(...conditions))
-        .groupBy(events.country)
-        .orderBy(desc(count()));
-
-      const byCountry = countryData
-        .filter((row) => row.country) // Filter out null countries
-        .map((row) => ({
-          country: row.country!,
-          count: Number(row.count),
-          percentage: totalScans > 0 
-            ? Number(((Number(row.count) / totalScans) * 100).toFixed(2))
-            : 0,
-        }));
-
-      // Aggregate by city (top 20 cities)
-      const cityData = await db
-        .select({
-          country: events.country,
-          city: events.city,
-          count: count(),
-        })
-        .from(events)
-        .where(and(...conditions))
-        .groupBy(events.country, events.city)
-        .orderBy(desc(count()))
-        .limit(20);
-
-      const byCity = cityData
-        .filter((row) => row.city && row.country) // Filter out nulls
-        .map((row) => ({
-          country: row.country!,
-          city: row.city!,
-          count: Number(row.count),
-        }));
-
-      return reply.send({
-        totalScans,
-        byCountry,
-        byCity,
-      });
-    } catch (error) {
-      console.error('Error fetching geography analytics:', error);
-      return reply.code(500).send({ error: 'Failed to fetch geography analytics' });
-    }
+      return reply.send(result.data);
   });
 
   /**
@@ -1283,85 +1206,73 @@ export default async function analyticsRoutes(app: any) {
    * For now, returns all QR codes in the system.
    */
   app.get("/analytics/overview", async (req: any, reply: any) => {
-    try {
-      // Get unique QR IDs (distinct count)
-      const uniqueQRs = await db
-        .select({ qrId: events.qrId })
-        .from(events)
-        .groupBy(events.qrId);
-      
-      const totalQRCodes = uniqueQRs.length;
+      const result = await withDLQ(async () => {
+        const uniqueQRs = await db
+          .select({ qrId: events.qrId })
+          .from(events)
+          .groupBy(events.qrId);
+        
+        const totalQRCodes = uniqueQRs.length;
 
-      // Total scans across all QR codes
-      const totalScansResult = await db
-        .select({ count: count() })
-        .from(events);
-      const totalScans = Number(totalScansResult[0]?.count) || 0;
+        const totalScansResult = await db
+          .select({ count: count() })
+          .from(events);
+        const totalScans = Number(totalScansResult[0]?.count) || 0;
 
-      // Today's scans
-      const startOfToday = new Date();
-      startOfToday.setUTCHours(0, 0, 0, 0);
-      
-      const todayResult = await db
-        .select({ count: count() })
-        .from(events)
-        .where(gte(events.timestamp, startOfToday));
-      const totalScansToday = Number(todayResult[0]?.count) || 0;
+        const startOfToday = new Date();
+        startOfToday.setUTCHours(0, 0, 0, 0);
+        
+        const todayResult = await db
+          .select({ count: count() })
+          .from(events)
+          .where(gte(events.timestamp, startOfToday));
+        const totalScansToday = Number(todayResult[0]?.count) || 0;
 
-      // Last 7 days scans
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      
-      const last7Result = await db
-        .select({ count: count() })
-        .from(events)
-        .where(gte(events.timestamp, sevenDaysAgo));
-      const totalScansLast7Days = Number(last7Result[0]?.count) || 0;
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        
+        const last7Result = await db
+          .select({ count: count() })
+          .from(events)
+          .where(gte(events.timestamp, sevenDaysAgo));
+        const totalScansLast7Days = Number(last7Result[0]?.count) || 0;
 
-      // Top QR codes by total scans
-      const topQRData = await db
-        .select({
-          qrId: events.qrId,
-          totalScans: count(),
-        })
-        .from(events)
-        .groupBy(events.qrId)
-        .orderBy(desc(count()))
-        .limit(10);
+        const topQRData = await db
+          .select({ qrId: events.qrId, totalScans: count() })
+          .from(events)
+          .groupBy(events.qrId)
+          .orderBy(desc(count()))
+          .limit(10);
 
-      // For each top QR, get today's scans
-      const topQRCodes = await Promise.all(
-        topQRData.map(async (qr) => {
-          const todayScansResult = await db
-            .select({ count: count() })
-            .from(events)
-            .where(
-              and(
-                eq(events.qrId, qr.qrId),
-                gte(events.timestamp, startOfToday)
-              )
-            );
-          
-          return {
-            qrId: qr.qrId,
-            totalScans: Number(qr.totalScans),
-            todayScans: Number(todayScansResult[0]?.count) || 0,
-            name: qr.qrId, // In production, fetch from QR service
-          };
-        })
-      );
+        const topQRCodes = await Promise.all(
+          topQRData.map(async (qr) => {
+            const todayScansResult = await db
+              .select({ count: count() })
+              .from(events)
+              .where(
+                and(
+                  eq(events.qrId, qr.qrId),
+                  gte(events.timestamp, startOfToday)
+                )
+              );
+            
+            return {
+              qrId: qr.qrId,
+              totalScans: Number(qr.totalScans),
+              todayScans: Number(todayScansResult[0]?.count) || 0,
+              name: qr.qrId,
+            };
+          })
+        );
 
-      return reply.send({
-        totalQRCodes,
-        totalScans,
-        totalScansToday,
-        totalScansLast7Days,
-        topQRCodes,
-      });
-    } catch (error) {
-      console.error('Error fetching overview analytics:', error);
-      return reply.code(500).send({ error: 'Failed to fetch overview analytics' });
-    }
+        return { totalQRCodes, totalScans, totalScansToday, totalScansLast7Days, topQRCodes };
+      }, { service: "analytics", operation: "overview" });
+
+      if (!result.success) {
+        return reply.code(500).send({ error: 'Failed to fetch overview analytics' });
+      }
+
+      return reply.send(result.data);
   });
 
   /**
@@ -1398,47 +1309,44 @@ export default async function analyticsRoutes(app: any) {
    * 4. Only new events are returned (efficient)
    */
   app.get("/analytics/live", async (req: any, reply: any) => {
-    try {
       const limit = parseInt(req.query.limit as string) || 50;
       const since = req.query.since as string;
 
-      // Build WHERE conditions
-      const conditions = [];
-      if (since) {
-        conditions.push(gte(events.timestamp, new Date(since)));
+      const result = await withDLQ(async () => {
+        const conditions = [];
+        if (since) {
+          conditions.push(gte(events.timestamp, new Date(since)));
+        }
+
+        const recentEvents = await db
+          .select({
+            id: events.id,
+            qrId: events.qrId,
+            eventType: events.eventType,
+            timestamp: events.timestamp,
+            deviceType: events.deviceType,
+            os: events.os,
+            browser: events.browser,
+            country: events.country,
+            city: events.city,
+          })
+          .from(events)
+          .where(conditions.length > 0 ? and(...conditions) : undefined)
+          .orderBy(desc(events.timestamp))
+          .limit(limit);
+
+        const latestTimestamp = recentEvents.length > 0 
+          ? recentEvents[0].timestamp?.toISOString()
+          : new Date().toISOString();
+
+        return { events: recentEvents, latestTimestamp };
+      }, { service: "analytics", operation: "live" });
+
+      if (!result.success) {
+        return reply.code(500).send({ error: 'Failed to fetch live events' });
       }
 
-      // Get recent events
-      const recentEvents = await db
-        .select({
-          id: events.id,
-          qrId: events.qrId,
-          eventType: events.eventType,
-          timestamp: events.timestamp,
-          deviceType: events.deviceType,
-          os: events.os,
-          browser: events.browser,
-          country: events.country,
-          city: events.city,
-        })
-        .from(events)
-        .where(conditions.length > 0 ? and(...conditions) : undefined)
-        .orderBy(desc(events.timestamp))
-        .limit(limit);
-
-      // Get latest timestamp for next poll
-      const latestTimestamp = recentEvents.length > 0 
-        ? recentEvents[0].timestamp?.toISOString()
-        : new Date().toISOString();
-
-      return reply.send({
-        events: recentEvents,
-        latestTimestamp,
-      });
-    } catch (error) {
-      console.error('Error fetching live events:', error);
-      return reply.code(500).send({ error: 'Failed to fetch live events' });
-    }
+      return reply.send(result.data);
   });
 
   /**
@@ -1470,83 +1378,75 @@ export default async function analyticsRoutes(app: any) {
    * }
    */
   app.get("/analytics/:qrId/device-models", async (req: any, reply: any) => {
-    try {
       const qrId = req.params.qrId;
       const { startDate, endDate } = req.query;
 
-      // Build WHERE conditions
-      const conditions = [eq(events.qrId, qrId)];
-      
-      if (startDate) {
-        conditions.push(gte(events.timestamp, new Date(startDate)));
+      const result = await withDLQ(async () => {
+        const conditions = [eq(events.qrId, qrId)];
+        
+        if (startDate) {
+          conditions.push(gte(events.timestamp, new Date(startDate)));
+        }
+        
+        if (endDate) {
+          const endDateTime = new Date(endDate);
+          endDateTime.setHours(23, 59, 59, 999);
+          conditions.push(sql`${events.timestamp} <= ${endDateTime}`);
+        }
+
+        const totalResult = await db
+          .select({ count: count() })
+          .from(events)
+          .where(and(...conditions));
+        const totalDevices = Number(totalResult[0]?.count) || 0;
+
+        const modelData = await db
+          .select({
+            vendor: events.deviceVendor,
+            model: events.deviceModel,
+            osVersion: events.osVersion,
+            count: count(),
+          })
+          .from(events)
+          .where(and(...conditions))
+          .groupBy(events.deviceVendor, events.deviceModel, events.osVersion)
+          .orderBy(desc(count()))
+          .limit(20);
+
+        const byModel = modelData
+          .filter(row => row.vendor && row.model)
+          .map((row) => ({
+            vendor: row.vendor!,
+            model: row.model!,
+            osVersion: row.osVersion || "unknown",
+            count: Number(row.count),
+          }));
+
+        const vendorData = await db
+          .select({ vendor: events.deviceVendor, count: count() })
+          .from(events)
+          .where(and(...conditions))
+          .groupBy(events.deviceVendor)
+          .orderBy(desc(count()));
+
+        const byVendor = vendorData
+          .filter(row => row.vendor)
+          .map((row) => ({
+            vendor: row.vendor!,
+            count: Number(row.count),
+            percentage: totalDevices > 0 
+              ? Number(((Number(row.count) / totalDevices) * 100).toFixed(2))
+              : 0,
+          }));
+
+        return { totalDevices, byModel, byVendor };
+      }, { service: "analytics", operation: "device-models", metadata: { qrId } });
+
+      if (!result.success) {
+        return reply.code(500).send({ error: 'Failed to fetch device models' });
       }
-      
-      if (endDate) {
-        const endDateTime = new Date(endDate);
-        endDateTime.setHours(23, 59, 59, 999);
-        conditions.push(sql`${events.timestamp} <= ${endDateTime}`);
-      }
 
-      // Get total count
-      const totalResult = await db
-        .select({ count: count() })
-        .from(events)
-        .where(and(...conditions));
-      const totalDevices = Number(totalResult[0]?.count) || 0;
-
-      // Aggregate by device model (vendor + model + OS version)
-      const modelData = await db
-        .select({
-          vendor: events.deviceVendor,
-          model: events.deviceModel,
-          osVersion: events.osVersion,
-          count: count(),
-        })
-        .from(events)
-        .where(and(...conditions))
-        .groupBy(events.deviceVendor, events.deviceModel, events.osVersion)
-        .orderBy(desc(count()))
-        .limit(20); // Top 20 device models
-
-      const byModel = modelData
-        .filter(row => row.vendor && row.model)
-        .map((row) => ({
-          vendor: row.vendor!,
-          model: row.model!,
-          osVersion: row.osVersion || "unknown",
-          count: Number(row.count),
-        }));
-
-      // Aggregate by vendor
-      const vendorData = await db
-        .select({
-          vendor: events.deviceVendor,
-          count: count(),
-        })
-        .from(events)
-        .where(and(...conditions))
-        .groupBy(events.deviceVendor)
-        .orderBy(desc(count()));
-
-      const byVendor = vendorData
-        .filter(row => row.vendor)
-        .map((row) => ({
-          vendor: row.vendor!,
-          count: Number(row.count),
-          percentage: totalDevices > 0 
-            ? Number(((Number(row.count) / totalDevices) * 100).toFixed(2))
-            : 0,
-        }));
-
-      return reply.send({
-        totalDevices,
-        byModel,
-        byVendor,
-      });
-    } catch (error) {
-      console.error('Error fetching device models:', error);
-      return reply.code(500).send({ error: 'Failed to fetch device models' });
-    }
+      return reply.send(result.data);
   });
 
   /**
@@ -1592,109 +1492,96 @@ export default async function analyticsRoutes(app: any) {
    * }
    */
   app.get("/analytics/:qrId/campaigns", async (req: any, reply: any) => {
-    try {
       const qrId = req.params.qrId;
       const { startDate, endDate } = req.query;
 
-      // Build WHERE conditions
-      const conditions = [
-        eq(events.qrId, qrId),
-        eq(events.eventType, 'microsite.viewed')
-      ];
-      
-      if (startDate) {
-        conditions.push(gte(events.timestamp, new Date(startDate)));
+      const result = await withDLQ(async () => {
+        const conditions = [
+          eq(events.qrId, qrId),
+          eq(events.eventType, 'microsite.viewed')
+        ];
+        
+        if (startDate) {
+          conditions.push(gte(events.timestamp, new Date(startDate)));
+        }
+        
+        if (endDate) {
+          const endDateTime = new Date(endDate);
+          endDateTime.setHours(23, 59, 59, 999);
+          conditions.push(sql`${events.timestamp} <= ${endDateTime}`);
+        }
+
+        const totalResult = await db
+          .select({ count: count() })
+          .from(events)
+          .where(and(...conditions));
+        const totalViews = Number(totalResult[0]?.count) || 0;
+
+        const campaignData = await db
+          .select({
+            source: events.utmSource,
+            medium: events.utmMedium,
+            campaign: events.utmCampaign,
+            count: count(),
+          })
+          .from(events)
+          .where(and(...conditions))
+          .groupBy(events.utmSource, events.utmMedium, events.utmCampaign)
+          .orderBy(desc(count()));
+
+        const campaigns = campaignData
+          .filter(row => row.source || row.medium || row.campaign)
+          .map((row) => ({
+            source: row.source || '(not set)',
+            medium: row.medium || '(not set)',
+            campaign: row.campaign || '(not set)',
+            views: Number(row.count),
+            percentage: totalViews > 0 
+              ? Number(((Number(row.count) / totalViews) * 100).toFixed(2))
+              : 0,
+          }));
+
+        const sourceData = await db
+          .select({ source: events.utmSource, count: count() })
+          .from(events)
+          .where(and(...conditions))
+          .groupBy(events.utmSource)
+          .orderBy(desc(count()));
+
+        const bySource = sourceData
+          .filter(row => row.source)
+          .map((row) => ({
+            source: row.source!,
+            views: Number(row.count),
+            percentage: totalViews > 0 
+              ? Number(((Number(row.count) / totalViews) * 100).toFixed(2))
+              : 0,
+          }));
+
+        const mediumData = await db
+          .select({ medium: events.utmMedium, count: count() })
+          .from(events)
+          .where(and(...conditions))
+          .groupBy(events.utmMedium)
+          .orderBy(desc(count()));
+
+        const byMedium = mediumData
+          .filter(row => row.medium)
+          .map((row) => ({
+            medium: row.medium!,
+            views: Number(row.count),
+            percentage: totalViews > 0 
+              ? Number(((Number(row.count) / totalViews) * 100).toFixed(2))
+              : 0,
+          }));
+
+        return { totalViews, campaigns, bySource, byMedium };
+      }, { service: "analytics", operation: "campaigns", metadata: { qrId } });
+
+      if (!result.success) {
+        return reply.code(500).send({ error: 'Failed to fetch campaign analytics' });
       }
-      
-      if (endDate) {
-        const endDateTime = new Date(endDate);
-        endDateTime.setHours(23, 59, 59, 999);
-        conditions.push(sql`${events.timestamp} <= ${endDateTime}`);
-      }
 
-      // Get total views
-      const totalResult = await db
-        .select({ count: count() })
-        .from(events)
-        .where(and(...conditions));
-      const totalViews = Number(totalResult[0]?.count) || 0;
-
-      // Aggregate by full campaign (source + medium + campaign name)
-      const campaignData = await db
-        .select({
-          source: events.utmSource,
-          medium: events.utmMedium,
-          campaign: events.utmCampaign,
-          count: count(),
-        })
-        .from(events)
-        .where(and(...conditions))
-        .groupBy(events.utmSource, events.utmMedium, events.utmCampaign)
-        .orderBy(desc(count()));
-
-      const campaigns = campaignData
-        .filter(row => row.source || row.medium || row.campaign) // At least one UTM param
-        .map((row) => ({
-          source: row.source || '(not set)',
-          medium: row.medium || '(not set)',
-          campaign: row.campaign || '(not set)',
-          views: Number(row.count),
-          percentage: totalViews > 0 
-            ? Number(((Number(row.count) / totalViews) * 100).toFixed(2))
-            : 0,
-        }));
-
-      // Aggregate by source
-      const sourceData = await db
-        .select({
-          source: events.utmSource,
-          count: count(),
-        })
-        .from(events)
-        .where(and(...conditions))
-        .groupBy(events.utmSource)
-        .orderBy(desc(count()));
-
-      const bySource = sourceData
-        .filter(row => row.source)
-        .map((row) => ({
-          source: row.source!,
-          views: Number(row.count),
-          percentage: totalViews > 0 
-            ? Number(((Number(row.count) / totalViews) * 100).toFixed(2))
-            : 0,
-        }));
-
-      // Aggregate by medium
-      const mediumData = await db
-        .select({
-          medium: events.utmMedium,
-          count: count(),
-        })
-        .from(events)
-        .where(and(...conditions))
-        .groupBy(events.utmMedium)
-        .orderBy(desc(count()));
-
-      const byMedium = mediumData
-        .filter(row => row.medium)
-        .map((row) => ({
-          medium: row.medium!,
-          views: Number(row.count),
-          percentage: totalViews > 0 
-            ? Number(((Number(row.count) / totalViews) * 100).toFixed(2))
-            : 0,
-        }));
-
-      return reply.send({
-        totalViews,
-        campaigns,
-        bySource,
-        byMedium,
-      });
-    } catch (error) {
-      console.error('Error fetching campaign analytics:', error);
-      return reply.code(500).send({ error: 'Failed to fetch campaign analytics' });
-    }
+      return reply.send(result.data);
   });
 }

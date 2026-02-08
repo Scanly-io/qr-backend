@@ -1,8 +1,10 @@
-import { verifyJWT, withDLQ } from "@qr/common";
+import { verifyJWT, withDLQ, getRedisClient } from "@qr/common";
 import { db } from "../db.js";
 import { microsites } from "../schema.js";
 import { eq, and } from "drizzle-orm";
 import { randomBytes } from "crypto";
+import { micrositeCacheKey, micrositeDataCacheKey } from "../utils/cachedKeys.js";
+import { CACHE_VERSION } from "../constants.js";
 
 // Generate a unique QR ID (e.g., "qr-a3f9c2")
 function generateQrId(): string {
@@ -192,6 +194,21 @@ export default async function micrositeRoutes(app: any) {
       return res.code(500).send({ error: "Failed to update microsite" });
     }
 
+    // 🔥 INVALIDATE CACHE after update
+    try {
+      const cache = await getRedisClient();
+      const qrIdKey = `${micrositeCacheKey(site.qrId || '')}:${CACHE_VERSION}`;
+      const uuidKey = `microsite:id:${micrositeId}:${CACHE_VERSION}`;
+      const dataKey = `${micrositeDataCacheKey(site.qrId || '')}:${CACHE_VERSION}`;
+      await cache.del(qrIdKey);
+      await cache.del(uuidKey);
+      await cache.del(dataKey);
+      req.log?.info({ micrositeId, qrId: site.qrId }, "Cache invalidated after update");
+    } catch (err) {
+      req.log?.warn({ err, micrositeId }, "Failed to invalidate cache");
+      // Don't fail the request if cache invalidation fails
+    }
+
     return { message: "Microsite updated" };
   });
 
@@ -242,6 +259,19 @@ export default async function micrositeRoutes(app: any) {
 
     if (!deleteResult.success) {
       return res.code(500).send({ error: "Failed to delete microsite" });
+    }
+
+    // 🔥 INVALIDATE CACHE after delete
+    try {
+      const cache = await getRedisClient();
+      const qrIdKey = `${micrositeCacheKey(site.qrId || '')}:${CACHE_VERSION}`;
+      const uuidKey = `microsite:id:${micrositeId}:${CACHE_VERSION}`;
+      const dataKey = `${micrositeDataCacheKey(site.qrId || '')}:${CACHE_VERSION}`;
+      await cache.del(qrIdKey);
+      await cache.del(uuidKey);
+      await cache.del(dataKey);
+    } catch (err) {
+      req.log?.warn({ err, micrositeId }, "Failed to invalidate cache on delete");
     }
 
     return res.code(200).send({ message: "Microsite deleted successfully" });
