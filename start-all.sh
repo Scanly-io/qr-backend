@@ -16,11 +16,11 @@ lsof -ti:3005 2>/dev/null | xargs kill -9 2>/dev/null || true
 echo ""
 echo "Starting Docker services (PostgreSQL, Redis, Kafka, Nginx)..."
 if docker compose up -d postgres redis redpanda nginx 2>/dev/null; then
-  echo "⏳ Waiting for Docker services to be ready..."
+  echo "Waiting for Docker services to be ready..."
   sleep 5
 else
-  echo "Docker not running. Skipping Docker services."
-  echo "Services will need local PostgreSQL/Redis/Kafka or will use stubs."
+  echo "WARNING: Docker not running. Skipping Docker services."
+  echo "         Services will need local PostgreSQL/Redis/Kafka or will use stubs."
   sleep 1
 fi
 
@@ -29,22 +29,38 @@ echo "Starting Node.js services..."
 echo ""
 
 # Auth Service
+<<<<<<< HEAD
 echo "Auth Service (port 3001)..."
+=======
+echo "  > Auth Service (port 3001)..."
+>>>>>>> 1ebe25d (Clean shell scripts: Remove emojis for professional terminal output)
 nohup npm run dev --workspace=@qr/auth-service > /tmp/auth.log 2>&1 &
 sleep 2
 
 # QR Service
+<<<<<<< HEAD
 echo "QR Service (port 3002)..."
+=======
+echo "  > QR Service (port 3002)..."
+>>>>>>> 1ebe25d (Clean shell scripts: Remove emojis for professional terminal output)
 nohup npm run dev --workspace=@qr/qr-service > /tmp/qr.log 2>&1 &
 sleep 2
 
 # Analytics Service
+<<<<<<< HEAD
 echo "Analytics Service (port 3004)..."
+=======
+echo "  > Analytics Service (port 3004)..."
+>>>>>>> 1ebe25d (Clean shell scripts: Remove emojis for professional terminal output)
 nohup npm run dev --workspace=@qr/analytics-service > /tmp/analytics.log 2>&1 &
 sleep 2
 
 # Microsite Service
+<<<<<<< HEAD
 echo "Microsite Service (port 3005)..."
+=======
+echo "  > Microsite Service (port 3005)..."
+>>>>>>> 1ebe25d (Clean shell scripts: Remove emojis for professional terminal output)
 nohup npm run dev --workspace=@qr/microsite-service > /tmp/microsite.log 2>&1 &
 sleep 3
 
@@ -52,10 +68,17 @@ echo ""
 echo "All services started!"
 echo ""
 echo "Service Status:"
+<<<<<<< HEAD
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 docker compose ps
 echo ""
 lsof -i :3001,:3002,:3004,:3005 | grep LISTEN || echo "  No Node services listening"
+=======
+echo "----------------------------------------------"
+docker compose ps
+echo ""
+lsof -i :3001,:3002,:3004,:3005 | grep LISTEN || echo "WARNING: No Node services listening"
+>>>>>>> 1ebe25d (Clean shell scripts: Remove emojis for professional terminal output)
 echo ""
 echo "URLs:"
 echo "  Gateway:    http://localhost"
